@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <link rel="icon" href="favicon.ico" type="image/x-icon">
+    <title>LibreQoS Bufferbloat Test</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-annotation@2.0.1/dist/chartjs-plugin-annotation.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html2canvas@1.4.1/dist/html2canvas.min.js"></script>
+    <script src="enhancedLogger.js"></script>
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="logo-container">
+                <img src="logo.svg" alt="LibreQoS Logo" class="logo">
+                <h1>LibreQoS Bufferbloat Test</h1>
+                <p id="headerDescription">Measure your connection's latency under load</p>
+            </div>
+        </header>
+
+        <div class="mode-toggle">
+            <div class="mode-option" id="singleUserMode">
+                <span class="mode-icon">👤</span>
+                <span class="mode-text">Single User Test</span>
+            </div>
+            <div class="mode-option" id="householdMode">
+                <span class="mode-icon">🏠</span>
+                <span class="mode-text">Virtual Household Mode</span>
+            </div>
+        </div>
+
+        <div class="test-container">
+            <div class="test-controls">
+                <button id="startTest" class="btn primary">Start Test</button>
+                <div id="testProgress" class="stepper-container">
+                    <div class="stepper">
+                        <div class="step baseline">
+                            <div class="step-icon"></div>
+                            <div class="step-label">Baseline</div>
+                            <div class="step-connector"></div>
+                        </div>
+                        <div class="step download_warmup">
+                            <div class="step-icon"></div>
+                            <div class="step-label">Download Warmup</div>
+                            <div class="step-connector"></div>
+                        </div>
+                        <div class="step download">
+                            <div class="step-icon"></div>
+                            <div class="step-label">Download Saturation</div>
+                            <div class="step-connector"></div>
+                        </div>
+                        <div class="step upload_warmup">
+                            <div class="step-icon"></div>
+                            <div class="step-label">Upload Warmup</div>
+                            <div class="step-connector"></div>
+                        </div>
+                        <div class="step upload">
+                            <div class="step-icon"></div>
+                            <div class="step-label">Upload Saturation</div>
+                            <div class="step-connector"></div>
+                        </div>
+                        <div class="step bidirectional">
+                            <div class="step-icon"></div>
+                            <div class="step-label">Bidirectional</div>
+                        </div>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill"></div>
+                    </div>
+                </div>
+                <div id="currentPhase">Ready to start</div>
+            </div>
+
+            <div class="chart-container">
+                <canvas id="latencyChart"></canvas>
+            </div>
+            
+            <div class="throughput-chart-container">
+                <canvas id="throughputChart"></canvas>
+            </div>
+
+            <div id="results" class="results-container hidden">
+                <h2>Test Results</h2>
+                
+                <!-- Total Grade Section -->
+                <div class="total-grade-container">
+                    <div class="total-grade-box">
+                        <h2>Total Bufferbloat Grade</h2>
+                        <div id="totalGrade" class="total-grade"></div>
+                        <p class="total-grade-description">Combined score from all test phases</p>
+                    </div>
+                </div>
+                
+                <!-- Share Button -->
+                <div class="share-container">
+                    <button id="shareResultBtn" class="btn share-btn">
+                        <span class="share-icon">📤</span>
+                        Share My Result
+                    </button>
+                </div>
+                
+                <!-- Individual Grades Section -->
+                <div class="individual-grades-section">
+                    <h3 class="section-title">Individual Phase Grades</h3>
+                    <div class="grade-container">
+                        <div class="grade-box">
+                            <h3>Download</h3>
+                            <div id="downloadGrade" class="grade"></div>
+                        </div>
+                        <div class="grade-box">
+                            <h3>Upload</h3>
+                            <div id="uploadGrade" class="grade"></div>
+                        </div>
+                        <div class="grade-box">
+                            <h3>Bidirectional</h3>
+                            <div id="bidirectionalGrade" class="grade"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- What Do My Results Mean? Section -->
+                <div class="results-explanation">
+                    <button id="toggleExplanation" class="explanation-toggle">
+                        <span class="toggle-icon">❓</span>
+                        What Do My Results Mean?
+                        <span class="toggle-arrow">▼</span>
+                    </button>
+                    <div id="explanationContent" class="explanation-content hidden">
+                        <div class="explanation-intro">
+                            <p>Your bufferbloat grade shows how much extra latency (delay) your connection adds when under heavy load. Lower latency increase = better grade.</p>
+                        </div>
+                        
+                        <!-- Total Grade Explanation -->
+                        <div class="total-grade-explanation-section">
+                            <h4>Total Grade</h4>
+                            <p>Your <strong>Total Bufferbloat Grade</strong> combines all three test phases with equal weighting (33.33% each). This gives you an overall assessment of your connection's bufferbloat performance across download, upload, and simultaneous bidirectional usage scenarios.</p>
+                        </div>
+                        
+                        <!-- Individual Grades Explanation -->
+                        <div class="individual-grades-explanation-section">
+                            <h4>Individual Phase Grades</h4>
+                            <p>Each phase tests different aspects of your connection's bufferbloat behavior under specific load conditions.</p>
+                        </div>
+                        
+                        <div class="grade-explanations">
+                            <div class="grade-explanation a-plus">
+                                <div class="grade-badge">A+</div>
+                                <div class="grade-description">
+                                    <h4>Excellent (0-5ms increase)</h4>
+                                    <p>Your connection has virtually no bufferbloat! Perfect for video calls, online gaming, and real-time applications. Your connection maintains low latency even under heavy load.</p>
+                                </div>
+                            </div>
+                            <div class="grade-explanation a">
+                                <div class="grade-badge">A</div>
+                                <div class="grade-description">
+                                    <h4>Very Good (5-30ms increase)</h4>
+                                    <p>Minimal bufferbloat with excellent performance. Great for video calls, streaming, and gaming. You may notice slight delays only during very heavy usage.</p>
+                                </div>
+                            </div>
+                            <div class="grade-explanation b">
+                                <div class="grade-badge">B</div>
+                                <div class="grade-description">
+                                    <h4>Good (30-60ms increase)</h4>
+                                    <p>Moderate bufferbloat that's generally acceptable. Good for most activities, though you might notice some lag during video calls or gaming when downloading large files.</p>
+                                </div>
+                            </div>
+                            <div class="grade-explanation c">
+                                <div class="grade-badge">C</div>
+                                <div class="grade-description">
+                                    <h4>Fair (60-200ms increase)</h4>
+                                    <p>Noticeable bufferbloat that affects performance. You'll likely experience lag during video calls, choppy streaming, and delayed responses in online games when your connection is busy.</p>
+                                </div>
+                            </div>
+                            <div class="grade-explanation d">
+                                <div class="grade-badge">D</div>
+                                <div class="grade-description">
+                                    <h4>Poor (200-400ms increase)</h4>
+                                    <p>Significant bufferbloat causing major performance issues. Video calls will be problematic, streaming may buffer frequently, and online gaming will be frustrating during heavy usage.</p>
+                                </div>
+                            </div>
+                            <div class="grade-explanation f">
+                                <div class="grade-badge">F</div>
+                                <div class="grade-description">
+                                    <h4>Very Poor (400ms+ increase)</h4>
+                                    <p>Severe bufferbloat making real-time applications nearly unusable. Video calls will drop frequently, streaming will buffer constantly, and online gaming will be extremely laggy when downloading or uploading.</p>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="explanation-footer">
+                            <p><strong>What can I do about bufferbloat?</strong> Consider upgrading your router firmware to one with better queue management (like OpenWrt with SQM), or contact your ISP about the issue.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="stats-container">
+                    <div class="stats-box">
+                        <h3>Latency (ms)</h3>
+                        <table id="latencyStats" class="stats-table">
+                            <thead>
+                                <tr>
+                                    <th>Phase</th>
+                                    <th>Median</th>
+                                    <th>Average</th>
+                                    <th>25th %</th>
+                                    <th>75th %</th>
+                                    <th>95th %</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Filled by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="stats-box">
+                        <h3>Throughput (Mbps)</h3>
+                        <table id="throughputStats" class="stats-table">
+                            <thead>
+                                <tr>
+                                    <th>Direction</th>
+                                    <th>Median</th>
+                                    <th>Average</th>
+                                    <th>75th %</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Filled by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="additional-stats">
+                    <div class="stat-item">
+                        <span class="stat-label">Download Latency Increase:</span>
+                        <span id="downloadLatencyIncrease" class="stat-value">-- ms</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Upload Latency Increase:</span>
+                        <span id="uploadLatencyIncrease" class="stat-value">-- ms</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Bidirectional Latency Increase:</span>
+                        <span id="bidirectionalLatencyIncrease" class="stat-value">-- ms</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Virtual Household Mode Container -->
+        <div id="householdContainer" class="household-container hidden">
+            <div class="household-controls">
+                <button id="start-household-test" class="btn primary">Start Test</button>
+                <div class="test-description">
+                    <p>Automatically detects your connection speed and simulates a busy household with 4 users competing for bandwidth.</p>
+                    <p><strong>Phase 1:</strong> Connection speed detection (10s) → <strong>Phase 2:</strong> Household simulation using detected speed (30s)</p>
+                </div>
+                <div class="test-progress-container">
+                    <div class="progress-bar-container">
+                        <div id="test-progress-bar" class="progress-bar" style="width: 0%;"></div>
+                    </div>
+                    
+                </div>
+                <div id="householdStatus" class="household-status">Ready to simulate a busy household</div>
+            </div>
+
+            <!-- Virtual Users - 4x2 Grid Layout -->
+            <div class="virtual-users">
+                <div class="users-section">
+                    <!-- Top Row: User Cards -->
+                    <div class="users-grid">
+                        <!-- Alex -->
+                        <div class="user-card" id="room-alex" data-user="alex">
+                            <div class="user-header">
+                                <div class="user-icon">👦</div>
+                                <div class="user-info">
+                                    <h4>Alex</h4>
+                                    <p>Competitive Gaming</p>
+                                </div>
+                            </div>
+                            <div class="activity-info">
+                                <div class="activity-icon">🎮</div>
+                                <div class="activity-text">Counter-Strike 2</div>
+                            </div>
+                            <div class="user-metrics">
+                                <div class="metric metric-download">
+                                    <span class="metric-label">Download:</span>
+                                    <span class="metric-value">-- Mbps</span>
+                                    <div class="metric-progress-container">
+                                        <div class="metric-progress">
+                                            <div class="metric-progress-fill download" style="width: 0%"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="metric metric-upload">
+                                    <span class="metric-label">Upload:</span>
+                                    <span class="metric-value">-- Mbps</span>
+                                    <div class="metric-progress-container">
+                                        <div class="metric-progress">
+                                            <div class="metric-progress-fill upload" style="width: 0%"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="metric metric-latency">
+                                    <span class="metric-label">Ping:</span>
+                                    <span class="metric-value">-- ms</span>
+                                    <span class="health-indicator" id="alexPingHealth">🟢</span>
+                                </div>
+                                <div class="metric metric-jitter">
+                                    <span class="metric-label">Jitter:</span>
+                                    <span class="metric-value">-- ms</span>
+                                </div>
+                            </div>
+                            <canvas class="sparkline" id="alexSparkline" width="200" height="40"></canvas>
+                        </div>
+
+                        <!-- Sarah -->
+                        <div class="user-card" id="room-sarah" data-user="sarah">
+                            <div class="user-header">
+                                <div class="user-icon">👩</div>
+                                <div class="user-info">
+                                    <h4>Sarah</h4>
+                                    <p>Video Conference</p>
+                                </div>
+                            </div>
+                            <div class="activity-info">
+                                <div class="activity-icon">💻</div>
+                                <div class="activity-text">Microsoft Teams</div>
+                            </div>
+                            <div class="user-metrics">
+                                <div class="metric metric-download">
+                                    <span class="metric-label">Download:</span>
+                                    <span class="metric-value">-- Mbps</span>
+                                    <div class="metric-progress-container">
+                                        <div class="metric-progress">
+                                            <div class="metric-progress-fill download" style="width: 0%"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="metric metric-upload">
+                                    <span class="metric-label">Upload:</span>
+                                    <span class="metric-value">-- Mbps</span>
+                                    <div class="metric-progress-container">
+                                        <div class="metric-progress">
+                                            <div class="metric-progress-fill upload" style="width: 0%"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="metric metric-latency">
+                                    <span class="metric-label">Ping:</span>
+                                    <span class="metric-value">-- ms</span>
+                                    <span class="health-indicator" id="sarahPingHealth">🟢</span>
+                                </div>
+                                <div class="metric metric-jitter">
+                                    <span class="metric-label">Jitter:</span>
+                                    <span class="metric-value">-- ms</span>
+                                </div>
+                            </div>
+                            <canvas class="sparkline" id="sarahSparkline" width="200" height="40"></canvas>
+                        </div>
+
+                        <!-- Jake -->
+                        <div class="user-card" id="room-jake" data-user="jake">
+                            <div class="user-header">
+                                <div class="user-icon">👨</div>
+                                <div class="user-info">
+                                    <h4>Jake</h4>
+                                    <p>HD Netflix Streaming</p>
+                                </div>
+                            </div>
+                            <div class="activity-info">
+                                <div class="activity-icon">📺</div>
+                                <div class="activity-text">Netflix HD</div>
+                            </div>
+                            <div class="user-metrics">
+                                <div class="metric metric-download">
+                                    <span class="metric-label">Download:</span>
+                                    <span class="metric-value">-- Mbps</span>
+                                    <div class="metric-progress-container">
+                                        <div class="metric-progress">
+                                            <div class="metric-progress-fill download" style="width: 0%"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="metric metric-upload">
+                                    <span class="metric-label">Upload:</span>
+                                    <span class="metric-value">-- Mbps</span>
+                                    <div class="metric-progress-container">
+                                        <div class="metric-progress">
+                                            <div class="metric-progress-fill upload" style="width: 0%"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="metric metric-latency">
+                                    <span class="metric-label">Ping:</span>
+                                    <span class="metric-value">-- ms</span>
+                                    <span class="health-indicator" id="jakePingHealth">🟢</span>
+                                </div>
+                                <div class="metric metric-jitter">
+                                    <span class="metric-label">Jitter:</span>
+                                    <span class="metric-value">-- ms</span>
+                                </div>
+                            </div>
+                            <canvas class="sparkline" id="jakeSparkline" width="200" height="40"></canvas>
+                        </div>
+
+                        <!-- Computer -->
+                        <div class="user-card" id="room-computer" data-user="computer">
+                            <div class="user-header">
+                                <div class="user-icon">🤖</div>
+                                <div class="user-info">
+                                    <h4>Computer</h4>
+                                    <p>Background Downloads</p>
+                                </div>
+                            </div>
+                            <div class="activity-info">
+                                <div class="activity-icon">☁️</div>
+                                <div class="activity-text">System Updates</div>
+                            </div>
+                            <div class="user-metrics">
+                                <div class="metric metric-download">
+                                    <span class="metric-label">Download:</span>
+                                    <span class="metric-value">-- Mbps</span>
+                                    <div class="metric-progress-container">
+                                        <div class="metric-progress">
+                                            <div class="metric-progress-fill download" style="width: 0%"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="metric metric-upload">
+                                    <span class="metric-label">Upload:</span>
+                                    <span class="metric-value">-- Mbps</span>
+                                    <div class="metric-progress-container">
+                                        <div class="metric-progress">
+                                            <div class="metric-progress-fill upload" style="width: 0%"></div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div class="metric metric-latency">
+                                    <span class="metric-label">Ping:</span>
+                                    <span class="metric-value">-- ms</span>
+                                    <span class="health-indicator" id="computerPingHealth">🟢</span>
+                                </div>
+                                <div class="metric metric-jitter">
+                                    <span class="metric-label">Jitter:</span>
+                                    <span class="metric-value">-- ms</span>
+                                </div>
+                            </div>
+                            <canvas class="sparkline" id="computerSparkline" width="200" height="40"></canvas>
+                        </div>
+                    </div>
+                    
+                    <!-- Bottom Row: Sentiment Containers -->
+                    <div class="sentiment-grid">
+                        <div class="sentiment-container alex-sentiment" id="alexSentiment">
+                            <span class="sentiment-text">"Connection feels great!"</span>
+                        </div>
+                        
+                        <div class="sentiment-container sarah-sentiment" id="sarahSentiment">
+                            <span class="sentiment-text">"Can everyone hear me?"</span>
+                        </div>
+                        
+                        <div class="sentiment-container jake-sentiment" id="jakeSentiment">
+                            <span class="sentiment-text">"Enjoying the show!"</span>
+                        </div>
+                        
+                        <div class="sentiment-container computer-sentiment" id="computerSentiment">
+                            <span class="sentiment-text">"Working in background"</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Results Summary -->
+            <div id="householdResults" class="household-results hidden">
+                <h2>Virtual Household Results</h2>
+                
+                <!-- Overall Performance -->
+                <div class="overall-performance">
+                    <h3>Overall Performance</h3>
+                    <div class="performance-grid">
+                        <div class="performance-card">
+                            <h4>Overall Grade</h4>
+                            <div class="performance-grade" id="overall-grade">--</div>
+                            <p>Combined performance score</p>
+                        </div>
+                        <div class="performance-card">
+                            <h4>Network Fairness</h4>
+                            <div class="performance-grade" id="network-fairness">--</div>
+                            <p>How well bandwidth was shared</p>
+                        </div>
+                        <div class="performance-card">
+                            <h4>Latency Stability</h4>
+                            <div class="performance-grade" id="latency-stability">--</div>
+                            <p>Consistency under load</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Individual User Results -->
+                <div class="user-results">
+                    <h3>Individual User Results</h3>
+                    <div class="user-results-grid">
+                        <div class="user-result-card">
+                            <div class="user-result-header">
+                                <span class="user-icon">🎮</span>
+                                <h4>Alex</h4>
+                            </div>
+                            <div class="user-result-grade" id="gamerResultGrade">A</div>
+                            <p id="gamerResultDescription">Minimal lag, consistent ping</p>
+                        </div>
+                        <div class="user-result-card">
+                            <div class="user-result-header">
+                                <span class="user-icon">👩‍💻</span>
+                                <h4>Sarah</h4>
+                            </div>
+                            <div class="user-result-grade" id="workerResultGrade">A+</div>
+                            <p id="workerResultDescription">Call was clear, zero drops or jitter</p>
+                        </div>
+                        <div class="user-result-card">
+                            <div class="user-result-header">
+                                <span class="user-icon">📺</span>
+                                <h4>Jake</h4>
+                            </div>
+                            <div class="user-result-grade" id="streamerResultGrade">B</div>
+                            <p id="streamerResultDescription">Slight buffering due BE congestion</p>
+                        </div>
+                        <div class="user-result-card">
+                            <div class="user-result-header">
+                                <span class="user-icon">⬇️</span>
+                                <h4>Computer</h4>
+                            </div>
+                            <div class="user-result-grade" id="downloaderResultGrade">C</div>
+                            <p id="downloaderResultDescription">High delay, low throughput (expected)</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recommendations -->
+                <div class="recommendations">
+                    <h3>Recommendations</h3>
+                    <ul class="recommendation-list" id="recommendations-list">
+                        <!-- Filled by JavaScript -->
+                    </ul>
+                </div>
+            </div>
+        </div>
+
+        <!-- Enhanced Logging Controls -->
+        <div id="enhancedLoggingControls" class="enhanced-logging-controls" style="position: fixed; bottom: 20px; right: 20px; background: white; border: 2px solid #007bff; border-radius: 8px; padding: 15px; box-shadow: 0 4px 8px rgba(0,0,0,0.2); z-index: 1000; max-width: 300px; display: none;">
+            <h4 style="margin: 0 0 10px 0; color: #007bff;">🔍 Enhanced Logger</h4>
+            <div style="font-size: 12px; color: #666; margin-bottom: 10px;">
+                <div id="logStats">Logs: 0 entries, 0 KB</div>
+                <div>Captures all console messages, WebRTC events, ICE candidates</div>
+            </div>
+            <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                <button id="exportEnhancedLogs" style="background: #28a745; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-size: 12px;">📥 Export Logs</button>
+                <button id="clearEnhancedLogs" style="background: #dc3545; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-size: 12px;">🗑️ Clear</button>
+                <button id="showLogStats" style="background: #17a2b8; color: white; border: none; padding: 5px 10px; border-radius: 3px; cursor: pointer; font-size: 12px;">📈 Stats</button>
+            </div>
+        </div>
+
+        <footer>
+            <p>LibreQoS Bufferbloat Test<br>Built with <span class="heart">❤️</span> by <a href="https://libreqos.io" target="_blank" rel="noopener noreferrer">LibreQoS</a></p>
+        </footer>
+        
+    </div>
+    
+    <!-- Enhanced Logger Controls Script -->
+    <script>
+        // Initialize enhanced logger controls when page loads
+        document.addEventListener('DOMContentLoaded', function() {
+            // Check if enhanced logger is available
+            if (window.EnhancedLogger) {
+                console.log('🔍 Enhanced Logger available - setting up controls');
+                
+                // Create global logger instance if not exists
+                if (!window.globalEnhancedLogger) {
+                    window.globalEnhancedLogger = new window.EnhancedLogger('MainPage');
+                    window.globalEnhancedLogger.log('🔍 Enhanced Logger initialized for main page');
+                }
+                
+                const logger = window.globalEnhancedLogger;
+                
+                // Export logs button
+                document.getElementById('exportEnhancedLogs').addEventListener('click', () => {
+                    logger.log('📥 Exporting complete logs from main page');
+                    logger.exportLogs();
+                });
+                
+                // Clear logs button
+                document.getElementById('clearEnhancedLogs').addEventListener('click', () => {
+                    logger.clearLogs();
+                    updateLogStats();
+                    logger.log('🗑️ Logs cleared from main page');
+                });
+                
+                // Show stats button
+                document.getElementById('showLogStats').addEventListener('click', () => {
+                    const stats = logger.getStats();
+                    logger.log('📈 Log Statistics:', stats);
+                    alert(`Enhanced Logger Statistics:\nEntries: ${stats.totalEntries}\nSize: ${(stats.totalSize / 1024).toFixed(1)} KB\nOldest: ${new Date(stats.oldestEntry).toLocaleString()}\nNewest: ${new Date(stats.newestEntry).toLocaleString()}`);
+                });
+                
+                function updateLogStats() {
+                    const stats = logger.getStats();
+                    document.getElementById('logStats').textContent =
+                        `Logs: ${stats.totalEntries} entries, ${(stats.totalSize / 1024).toFixed(1)} KB`;
+                }
+                
+                // Update log stats every 5 seconds
+                setInterval(updateLogStats, 5000);
+                updateLogStats();
+                
+                // Set initial visibility based on debug mode
+                const enhancedLoggingControls = document.getElementById('enhancedLoggingControls');
+                if (enhancedLoggingControls) {
+                    enhancedLoggingControls.style.display = window.debugMode ? 'block' : 'none';
+                }
+                
+            } else {
+                console.warn('⚠️ Enhanced Logger not available');
+                // Hide the controls if enhanced logger is not available
+                document.getElementById('enhancedLoggingControls').style.display = 'none';
+            }
+        });
+    </script>
+    
+    <!-- Load warmup and adaptive controllers -->
+    <script src="virtualHousehold/householdWarmup.js"></script>
+    <script src="virtualHousehold/adaptiveController.js"></script>
+    
+    <!-- Load modules -->
+    <script type="module" src="app.js"></script>
+</body>
+</html>

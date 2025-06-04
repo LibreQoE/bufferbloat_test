@@ -1,0 +1,22 @@
+[Unit]
+Description=LibreQoS Bufferbloat Test Server
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/libreqos_test
+ExecStart=/usr/bin/python3 /opt/libreqos_test/start_simple_multiprocess.py --ssl-certfile /opt/libreqos_test/ssl/cert.pem --ssl-keyfile /opt/libreqos_test/ssl/key.pem --port 443
+ExecStop=/bin/bash -c 'pkill -9 -f "multiprocess.py" || true; pkill -9 -f "simple_user_process.py" || true'
+Restart=on-failure
+RestartSec=10
+TimeoutStartSec=30
+TimeoutStopSec=15
+KillMode=control-group
+KillSignal=SIGTERM
+SendSIGKILL=yes
+StandardOutput=journal
+StandardError=journal
+
+[Install]
+WantedBy=multi-user.target
