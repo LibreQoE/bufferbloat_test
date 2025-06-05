@@ -525,6 +525,8 @@ class UIHousehold {
     
     onTestComplete(results) {
         this.testRunning = false;
+        // Keep isActive = true so UI continues to show any ongoing data updates
+        // This helps diagnose if WebSockets are not properly closed
         
         // Stop all smooth update timers
         this.stopSmoothUpdateTimers();
@@ -848,44 +850,18 @@ class UIHousehold {
     handleTrafficUpdate(event) {
         const { userId, throughput, status, downloadThroughput, uploadThroughput } = event.detail;
         
-        console.log(`🎯 UI received traffic-update event for ${userId}:`, {
-            userId,
-            throughput,
-            downloadThroughput,
-            uploadThroughput,
-            status,
-            isActive: this.isActive,
-            eventDetail: event.detail
-        });
-        
-        
         if (!this.isActive) {
-            console.log(`⚠️ UI not active, ignoring traffic update for ${userId}. Current isActive: ${this.isActive}`);
             return;
         }
-        
-        console.log(`✅ Processing traffic update for ${userId} - UI is active`);
         
         // Use actual throughput values from workers - no artificial splits
         // This accurately tracks real traffic in each direction
         let calculatedDownload = downloadThroughput || 0;
         let calculatedUpload = uploadThroughput || 0;
         
-        // Debug logging for all users
-        console.log(`🖥️ ${userId.toUpperCase()} TRAFFIC VALUES:`, {
-            hasDirectDownload: downloadThroughput !== undefined && downloadThroughput !== null,
-            hasDirectUpload: uploadThroughput !== undefined && uploadThroughput !== null,
-            directDownload: downloadThroughput,
-            directUpload: uploadThroughput,
-            totalThroughput: throughput,
-            finalDownload: calculatedDownload,
-            finalUpload: calculatedUpload
-        });
-        
         // Only use total throughput as fallback if no directional data is available
         // This preserves backward compatibility with workers that only send total throughput
         if (calculatedDownload === 0 && calculatedUpload === 0 && throughput !== undefined && throughput > 0) {
-            console.log(`⚠️ ${userId}: No directional data available, using total throughput as download: ${throughput}`);
             calculatedDownload = throughput;
             calculatedUpload = 0;
         }
@@ -896,15 +872,6 @@ class UIHousehold {
             downloadThroughput: calculatedDownload,
             uploadThroughput: calculatedUpload
         };
-        
-        // SMOOTHED UPDATE: Apply smoothing to prevent oscillations
-        // Buffer the raw values and let the smoothing system handle display updates
-        console.log(`🚀 Buffering smoothed update for ${userId}:`, {
-            rawDownload: calculatedDownload,
-            rawUpload: calculatedUpload,
-            testRunning: this.testRunning,
-            isActive: this.isActive
-        });
         
         // Apply smoothing immediately for responsive display
         const smoothedDownload = this.getSmoothedValue(userId, 'downloadThroughput', calculatedDownload);
@@ -930,7 +897,6 @@ class UIHousehold {
     updateUserNumbersOnly(userId, metrics) {
         const card = document.getElementById(`room-${userId}`);
         if (!card) {
-            console.warn(`⚠️ Card not found for user ${userId}`);
             return;
         }
         
@@ -956,9 +922,6 @@ class UIHousehold {
                 }
                 
                 downloadEl.textContent = `${displayValue} ${unit}`;
-                console.log(`📥 Updated download display for ${userId}: ${displayValue} ${unit} (raw: ${bps} bps)`);
-            } else {
-                console.warn(`⚠️ Download element not found for ${userId} in updateUserNumbersOnly`);
             }
         }
         
@@ -984,9 +947,6 @@ class UIHousehold {
                 }
                 
                 uploadEl.textContent = `${displayValue} ${unit}`;
-                console.log(`📤 Updated upload display for ${userId}: ${displayValue} ${unit} (raw: ${bps} bps)`);
-            } else {
-                console.warn(`⚠️ Upload element not found for ${userId} in updateUserNumbersOnly`);
             }
         }
         
@@ -1051,8 +1011,6 @@ class UIHousehold {
                 } else {
                     downloadProgressEl.classList.remove('target-achieved');
                 }
-            } else {
-                console.warn(`⚠️ Download progress element not found for ${userId} in updateUserProgressBarsOnly`);
             }
         }
         
@@ -1072,8 +1030,6 @@ class UIHousehold {
                 } else {
                     uploadProgressEl.classList.remove('target-achieved');
                 }
-            } else {
-                console.warn(`⚠️ Upload progress element not found for ${userId} in updateUserProgressBarsOnly`);
             }
         }
         
@@ -1218,7 +1174,6 @@ class UIHousehold {
                 }
                 
                 downloadEl.textContent = `${displayValue} ${unit}`;
-                console.log(`📥 Updated download for ${userId}: ${displayValue} ${unit} (raw: ${bps} bps)`);
                 
                 // Show target if element exists
                 if (downloadTargetEl && user) {
@@ -1272,7 +1227,6 @@ class UIHousehold {
                 }
                 
                 uploadEl.textContent = `${displayValue} ${unit}`;
-                console.log(`📤 Updated upload for ${userId}: ${displayValue} ${unit} (raw: ${bps} bps)`);
                 
                 // Show target if element exists
                 if (uploadTargetEl && user) {
@@ -1396,7 +1350,6 @@ class UIHousehold {
                 }
                 
                 downloadEl.textContent = `${displayValue} ${unit}`;
-                console.log(`📥 Updated legacy download for ${userId}: ${displayValue} ${unit} (raw: ${bps} bps)`);
                 
                 // Update progress bar
                 if (downloadProgressEl) {
@@ -1491,7 +1444,6 @@ class UIHousehold {
     updateUserSentiment(userId, sentimentData) {
         // Store the sentiment update for the separate timer to process
         this.pendingSentiments[userId] = sentimentData;
-        console.log(`💭 Queued sentiment for ${userId}: ${sentimentData.level} - "${sentimentData.message}"`);
     }
     
     startSentimentTimer() {
@@ -1554,8 +1506,6 @@ class UIHousehold {
             // Fade back in
             container.style.opacity = '1';
         }, 250);
-        
-        console.log(`💬 Updated sentiment container for ${userId}: ${sentimentData.level} - "${sentimentData.message}"`);
     }
     
     getStatusMessage(status) {
@@ -1630,7 +1580,11 @@ class UIHousehold {
         
         try {
             // Clean up any existing results first
-            cleanupResults();
+            cleanupResults('householdResults');
+            
+            // Clear the results container completely to remove any static HTML
+            this.elements.resultsContainer.innerHTML = '';
+            console.log('🏠 Cleared householdResults container of static HTML');
             
             // Create Virtual Household adapter to transform results data
             const adapter = createVirtualHouseholdAdapter();
@@ -1663,6 +1617,7 @@ class UIHousehold {
             
         } catch (error) {
             console.error('❌ Error displaying Virtual Household results with shared system:', error);
+            console.error('❌ Error stack:', error.stack);
             console.error('❌ Falling back to legacy display');
             
             // Fallback to legacy display if shared system fails
@@ -2214,7 +2169,6 @@ class UIHousehold {
         if (statusEl) {
             statusEl.textContent = message;
         }
-        console.log('🏠 Status:', message);
     }
     
     setTestRunning(running) {
@@ -2222,7 +2176,7 @@ class UIHousehold {
         
         if (this.elements.startButton) {
             this.elements.startButton.disabled = running;
-            this.elements.startButton.textContent = running ? 'Two-Phase Test Running...' : 'Start Two-Phase Household Test';
+            this.elements.startButton.textContent = running ? 'Test Running...' : 'Start Test';
         }
         
         // Stop button removed

@@ -123,25 +123,23 @@ class SingleUserProcessServer:
                 await self.session_manager.stop_session(user_id)
                 logger.info(f"🧹 {self.user_type.title()} session cleaned up: {user_id}")
         
-        @self.app.websocket("/ws/virtual-household/{user_id}")
-        async def websocket_generic_endpoint(websocket: WebSocket, user_id: str):
-            """Generic endpoint that accepts any user_id but uses this process's user type"""
-            # Force the user to use this process's user type for consistency
-            actual_user_id = f"{self.user_type}_{user_id}_{int(time.time() * 1000)}"
-            logger.info(f"🔌 {self.user_type.title()} WebSocket (generic): {actual_user_id}")
-            
-            try:
-                if not await self.session_manager.start_session(actual_user_id, websocket):
-                    await websocket.close(code=1013, reason="Server capacity exceeded")
-                    return
-                
-                self.stats['connections'] += 1
-                await self._handle_websocket_messages(websocket, actual_user_id)
-                
-            except Exception as e:
-                logger.error(f"❌ {self.user_type.title()} WebSocket error for {actual_user_id}: {e}")
-            finally:
-                await self.session_manager.stop_session(actual_user_id)
+        # CRITICAL FIX: Add HTTP endpoint blocker to prevent redirect requests from creating sessions
+        @self.app.get("/ws/virtual-household/{user_id}")
+        async def block_http_redirect_requests(user_id: str):
+            """Block HTTP requests that should only be handled by main server"""
+            logger.warning(f"🚫 {self.user_type.title()} process rejecting HTTP redirect request for {user_id}")
+            logger.warning(f"🚫 HTTP redirect requests should only go to main server (port 8000)")
+            return {
+                "error": "HTTP redirect requests not supported on dedicated processes",
+                "message": f"This is the {self.user_type} dedicated process. HTTP redirects should go to main server.",
+                "user_type": self.user_type,
+                "port": self.port,
+                "redirect_to": "http://localhost:8000/ws/virtual-household/" + user_id
+            }, 400
+        
+        # REMOVED: Generic endpoint that was creating orphaned sessions
+        # The dedicated process should ONLY handle its specific user type
+        # Generic user_id routing should be handled by the main server
         
         @self.app.get("/health")
         async def health_check():
@@ -230,6 +228,54 @@ class SingleUserProcessServer:
                     
             except Exception as e:
                 logger.error(f"❌ ADAPTIVE: Error updating {self.user_type} profile: {e}")
+                return {"error": str(e)}, 500
+        
+        @self.app.post("/stop-session")
+        async def stop_session_endpoint(request_data: dict):
+            """Stop a specific session on this process"""
+            try:
+                session_id = request_data.get('session_id')
+                user_type = request_data.get('user_type', '').lower()
+                action = request_data.get('action')
+                reason = request_data.get('reason', 'client_request')
+                
+                logger.info(f"🛑 {self.user_type.title()} process received stop request for session: {session_id}")
+                
+                # Verify this is for our user type
+                if user_type != self.user_type:
+                    logger.warning(f"🛑 Stop request rejected - target: {user_type}, process: {self.user_type}")
+                    return {"error": f"This process handles {self.user_type}, not {user_type}"}, 400
+                
+                # Find and stop the session
+                stopped_sessions = []
+                for user_id, session in list(self.session_manager.sessions.items()):
+                    if session_id in user_id or user_id == session_id:
+                        logger.info(f"🛑 {self.user_type.title()} stopping session: {user_id}")
+                        session.active = False
+                        await self.session_manager.stop_session(user_id)
+                        stopped_sessions.append(user_id)
+                
+                if stopped_sessions:
+                    logger.info(f"✅ {self.user_type.title()} stopped {len(stopped_sessions)} sessions")
+                    return {
+                        "success": True,
+                        "message": f"Stopped {len(stopped_sessions)} sessions",
+                        "stopped_sessions": stopped_sessions,
+                        "user_type": self.user_type,
+                        "reason": reason
+                    }
+                else:
+                    logger.warning(f"⚠️ {self.user_type.title()} no matching sessions found for: {session_id}")
+                    return {
+                        "success": False,
+                        "message": "No matching sessions found",
+                        "session_id": session_id,
+                        "user_type": self.user_type,
+                        "active_sessions": list(self.session_manager.sessions.keys())
+                    }
+                    
+            except Exception as e:
+                logger.error(f"❌ {self.user_type.title()} error stopping session: {e}")
                 return {"error": str(e)}, 500
     
     async def _handle_websocket_messages(self, websocket: WebSocket, user_id: str):

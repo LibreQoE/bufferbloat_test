@@ -135,10 +135,19 @@ async def websocket_virtual_user_main(websocket: WebSocket, user_id: str):
     
     try:
         if SIMPLE_MULTIPROCESS_AVAILABLE and process_manager.is_running():
-            # This should not happen in normal operation since clients should use redirect
-            # But we'll handle it gracefully by closing with redirect instruction
-            await websocket.close(code=1014, reason=f"Please connect to dedicated process. Use GET /ws/virtual-household/{user_id} first.")
-            return
+            # FIXED: Get port and redirect client to dedicated process
+            port = process_manager.get_port_for_user(user_id)
+            
+            if port:
+                # Close with redirect instruction containing the correct port
+                redirect_reason = f"Redirect to port {port}"
+                logger.info(f"🔀 Redirecting {user_id} WebSocket to dedicated process on port {port}")
+                await websocket.close(code=1014, reason=redirect_reason)
+                return
+            else:
+                logger.error(f"❌ No healthy process available for {user_id}")
+                await websocket.close(code=1013, reason=f"No healthy process for {user_id}")
+                return
         else:
             # Multi-process system not available
             await websocket.close(code=1013, reason="Multi-process system not available")

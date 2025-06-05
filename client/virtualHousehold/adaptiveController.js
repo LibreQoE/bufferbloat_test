@@ -17,6 +17,7 @@ class AdaptiveController {
         this.householdDuration = 30000; // 30 seconds
         
         this.testStartTime = null;
+        this.householdPhaseStarted = false; // Guard against double execution
     }
 
     updateOverallProgress() {
@@ -38,16 +39,15 @@ class AdaptiveController {
                 }
             }
         } else if (this.state === 'household') {
-            // Phase 2: Show progress from 0% to 100% over 30 seconds
-            const householdStart = this.warmupDuration + 1000; // 10s warmup + 1s pause
-            const householdElapsed = Math.max(0, elapsed - householdStart);
-            progress = Math.min((householdElapsed / this.householdDuration) * 100, 100);
+            // Phase 2: Let UIHousehold handle progress bar updates to avoid conflicts
+            // Don't update progress bar here to prevent blinking
+            return;
         }
         
         // Ensure progress is within bounds
         progress = Math.max(0, Math.min(progress, 100));
         
-        // Update the main progress bar
+        // Update the main progress bar (only during warmup phase)
         const progressBar = document.getElementById('test-progress-bar');
         
         if (progressBar) {
@@ -59,15 +59,6 @@ class AdaptiveController {
             this.virtualHousehold.ui.updateStatus('Phase 1: Detecting connection speed...');
         } else if (this.state === 'household') {
             this.virtualHousehold.ui.updateStatus('Phase 2: Household simulation...');
-        }
-    }
-
-    resetProgressForPhase2() {
-        console.log('🔄 Resetting progress bar for Phase 2');
-        // Reset progress to 0% for Phase 2
-        const progressBar = document.getElementById('test-progress-bar');
-        if (progressBar) {
-            progressBar.style.width = '0%';
         }
     }
 
@@ -96,10 +87,7 @@ class AdaptiveController {
             console.log('✅ Phase 1: Connection speed detection complete');
             console.log('🔍 DEBUG: Warmup results after Phase 1:', this.warmupResults);
             
-            // Reset progress bar for Phase 2
-            this.resetProgressForPhase2();
-            
-            // Brief pause between phases
+            // Brief pause between phases (removed progress bar reset to prevent blinking)
             console.log('🔍 DEBUG: Pausing 1 second between phases');
             await new Promise(resolve => setTimeout(resolve, 1000));
             
@@ -185,6 +173,13 @@ class AdaptiveController {
     // Removed separate results phase - goes directly to household simulation
 
     async startHouseholdPhase() {
+        // DOUBLE EXECUTION GUARD: Prevent multiple calls to household phase
+        if (this.householdPhaseStarted) {
+            console.log('⚠️ DOUBLE EXECUTION PREVENTED: startHouseholdPhase() already called');
+            return;
+        }
+        this.householdPhaseStarted = true;
+        
         console.log('🏠 Phase 2: Household Simulation (30s)');
         this.state = 'household';
         
@@ -247,6 +242,7 @@ class AdaptiveController {
         }
         
         this.state = 'idle';
+        this.householdPhaseStarted = false; // Reset guard for next test
     }
 
     /**

@@ -791,9 +791,10 @@ class HighPerformanceSessionManager:
             logger.info(f"🔍 SESSION_EXPIRED: {session.user_id} - Inactive for {inactive_duration:.1f}s (limit: {session.inactivity_timeout}s)")
             return True
         
-        # Check maximum session duration
-        if total_duration > session.max_session_duration:
-            logger.info(f"🔍 SESSION_EXPIRED: {session.user_id} - Total duration {total_duration:.1f}s (limit: {session.max_session_duration}s)")
+        # Check maximum session duration (reduced from 5 minutes to 2 minutes for faster cleanup)
+        max_duration = 120  # 2 minutes maximum session duration
+        if total_duration > max_duration:
+            logger.info(f"🔍 SESSION_EXPIRED: {session.user_id} - Total duration {total_duration:.1f}s (limit: {max_duration}s)")
             return True
         
         # Check connection test failures
@@ -1648,6 +1649,66 @@ async def get_adaptive_profiles(computer_speed_mbps: float = 200.0):
     except Exception as e:
         logger.error(f"❌ Error getting adaptive profiles: {e}")
         return JSONResponse({"error": str(e)}, status_code=500)
+@router.post("/virtual-household/stop-user-sessions/{test_id}")
+async def stop_user_sessions(test_id: str):
+    """Stop ALL sessions for a specific test ID (safe for multi-user environment)"""
+    try:
+        logger.info(f"🛑 HTTP_STOP: Received stop request for test ID: {test_id}")
+        
+        stopped_sessions = []
+        total_sessions = len(session_manager.sessions)
+        
+        # Find all sessions that match the test ID
+        sessions_to_stop = []
+        for session_id, session in list(session_manager.sessions.items()):
+            # Extract timestamp from session ID (e.g., "alex_1749143640811" -> "1749143640811")
+            if '_' in session_id:
+                session_timestamp = session_id.split('_')[1]
+                # Convert to test ID format (seconds instead of milliseconds)
+                session_test_id = str(int(session_timestamp) // 1000)
+                if session_test_id == test_id:
+                    sessions_to_stop.append(session_id)
+            
+            # Also support legacy "all" parameter for backward compatibility
+            if test_id.lower() == 'all':
+                sessions_to_stop.append(session_id)
+        
+        logger.info(f"🛑 HTTP_STOP: Found {len(sessions_to_stop)} sessions to stop for test ID '{test_id}': {sessions_to_stop}")
+        
+        # Stop each matching session
+        for session_id in sessions_to_stop:
+            try:
+                logger.info(f"🛑 HTTP_STOP: Stopping session {session_id}")
+                await session_manager.stop_session(session_id)
+                stopped_sessions.append(session_id)
+                logger.info(f"✅ HTTP_STOP: Successfully stopped session {session_id}")
+            except Exception as e:
+                logger.error(f"❌ HTTP_STOP: Failed to stop session {session_id}: {e}")
+        
+        remaining_sessions = len(session_manager.sessions)
+        
+        logger.info(f"🛑 HTTP_STOP: Completed stop request for test ID '{test_id}' - "
+                   f"Stopped: {len(stopped_sessions)}, "
+                   f"Total before: {total_sessions}, "
+                   f"Remaining: {remaining_sessions}")
+        
+        return JSONResponse({
+            "success": True,
+            "test_id": test_id,
+            "stopped_sessions": stopped_sessions,
+            "stopped_count": len(stopped_sessions),
+            "total_sessions_before": total_sessions,
+            "remaining_sessions": remaining_sessions,
+            "message": f"Stopped {len(stopped_sessions)} sessions for test ID '{test_id}'"
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ HTTP_STOP: Error stopping sessions for test ID '{test_id}': {e}")
+        return JSONResponse({
+            "success": False,
+            "error": str(e),
+            "test_id": test_id
+        }, status_code=500)
 
 @router.get("/virtual-household/health")
 async def virtual_household_health():

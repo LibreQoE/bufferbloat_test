@@ -13,8 +13,8 @@ from fastapi import Request, Response, HTTPException
 from fastapi.responses import JSONResponse
 
 # Constants for rate limiting and size control
-MAX_CHUNK_SIZE = 1024 * 1024  # Process in 1MB chunks max (increased for gigabit+)
-MAX_REQUEST_SIZE = 64 * 1024 * 1024  # 64MB max per request (increased for gigabit+)
+MAX_CHUNK_SIZE = 8 * 1024 * 1024  # Process in 8MB chunks max (optimized for ultra-high-speed)
+MAX_REQUEST_SIZE = 128 * 1024 * 1024  # 128MB max per request (increased for ultra-high-speed)
 MAX_PROCESSING_RATE = 2000 * 1024 * 1024  # 2000MB/s max processing rate (16 Gbps)
 
 async def create_upload_endpoint(app, logger_prefix: str = "", traffic_pattern: str = "standard"):
@@ -84,13 +84,18 @@ async def create_upload_endpoint(app, logger_prefix: str = "", traffic_pattern: 
                     
                     if time_since_check > 0.1:  # Check every 100ms
                         current_rate = bytes_since_check / time_since_check
+                        current_rate_mbps = (current_rate * 8) / 1000000  # Convert to Mbps
+                        
+                        # 🚨 DIAGNOSTIC: Log high-speed upload rates for 500-2000 Mbps connections
+                        if current_rate_mbps > 400:  # Log rates above 400 Mbps
+                            logger.info(f"{logger_prefix}🚨 HIGH-SPEED UPLOAD: {current_rate_mbps:.2f} Mbps ({current_rate/1024/1024:.2f} MB/s)")
                         
                         # Only throttle if we're exceeding the very high limit (for server protection)
                         if current_rate > max_processing_rate:
                             delay_time = bytes_since_check / max_processing_rate - time_since_check
                             if delay_time > 0:
                                 # Log if we're throttling at the extreme limit
-                                logger.warning(f"{logger_prefix}Rate limiting: {current_rate/1024/1024:.2f} MB/s exceeds {max_processing_rate/1024/1024} MB/s, adding {delay_time*1000:.1f}ms delay")
+                                logger.warning(f"{logger_prefix}🚨 RATE LIMITING ACTIVE: {current_rate_mbps:.2f} Mbps exceeds {(max_processing_rate*8)/1000000:.0f} Mbps limit, adding {delay_time*1000:.1f}ms delay")
                                 await asyncio.sleep(delay_time)
                         
                         # Reset rate monitoring counters
@@ -113,6 +118,7 @@ async def create_upload_endpoint(app, logger_prefix: str = "", traffic_pattern: 
                     "Cache-Control": "no-store",
                     "Pragma": "no-cache",
                     "Connection": "keep-alive",  # Encourage connection reuse
+                    "Content-Encoding": "identity",  # Disable compression for optimal connection reuse
                     "X-Worker-Source": logger_prefix.strip("[] ") if logger_prefix else "main"
                 }
             )

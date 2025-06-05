@@ -11,6 +11,25 @@ import { updateSpeedEstimationStatus, updateParameterOptimizationStatus, updateO
 import { generateTestData as xoshiroGenerateTestData, getPooledTestData } from './xoshiro.js';
 
 /**
+ * Create standardized headers for upload requests to ensure TCP connection reuse
+ * @param {Object} additionalHeaders - Optional additional headers to include
+ * @returns {Object} Standardized headers object
+ */
+function createUploadHeaders(additionalHeaders = {}) {
+    const baseHeaders = {
+        'Content-Type': 'application/octet-stream',
+        'Connection': 'keep-alive',
+        'Keep-Alive': 'timeout=30, max=100',
+        'Cache-Control': 'no-store',
+        'Pragma': 'no-cache',
+        'Accept-Encoding': 'identity'  // Request no compression for optimal connection reuse
+    };
+    
+    // Merge additional headers while preserving base headers for connection reuse
+    return { ...baseHeaders, ...additionalHeaders };
+}
+
+/**
  * AdaptiveWarmup Class
  * Handles intelligent speed estimation and targeted parameter optimization
  */
@@ -77,33 +96,25 @@ class AdaptiveWarmup {
                     { streamCount: 4, pendingUploads: 4 }
                 ],
                 gigabit: [
-                    { streamCount: 3, pendingUploads: 8 },
-                    { streamCount: 4, pendingUploads: 6 },
-                    { streamCount: 4, pendingUploads: 8 },
-                    { streamCount: 4, pendingUploads: 12 }
-                ],
-                ultragig: [
-                    { streamCount: 6, pendingUploads: 16 },
-                    { streamCount: 8, pendingUploads: 20 },
-                    { streamCount: 8, pendingUploads: 24 },
-                    { streamCount: 8, pendingUploads: 32 },
-                    { streamCount: 10, pendingUploads: 24 },
-                    { streamCount: 10, pendingUploads: 32 },
-                    { streamCount: 12, pendingUploads: 40 },
-                    { streamCount: 16, pendingUploads: 48 },
-                    { streamCount: 20, pendingUploads: 60 }
+                    { streamCount: 8, pendingUploads: 12 },  // 96 concurrent uploads
+                    { streamCount: 10, pendingUploads: 10 }, // 100 concurrent uploads
+                    { streamCount: 12, pendingUploads: 8 },  // 96 concurrent uploads
+                    { streamCount: 8, pendingUploads: 16 },  // 128 concurrent uploads
+                    { streamCount: 10, pendingUploads: 12 }, // 120 concurrent uploads
+                    { streamCount: 12, pendingUploads: 10 }, // 120 concurrent uploads
+                    { streamCount: 16, pendingUploads: 8 },  // 128 concurrent uploads
+                    { streamCount: 14, pendingUploads: 10 }  // 140 concurrent uploads
                 ]
             }
         };
         
-        // Speed tier boundaries - optimized for asymmetric residential connections
+        // Speed tier boundaries - simplified for better performance
         this.tierBoundaries = {
             // Upload-optimized boundaries (download uses different logic)
             slow: { min: 0, max: 10 },      // Very slow upload
             medium: { min: 10, max: 100 },  // Typical residential upload
             fast: { min: 100, max: 300 },   // High-speed residential upload
-            gigabit: { min: 300, max: 700 }, // Gigabit upload
-            ultragig: { min: 700, max: Infinity } // Ultra-high-speed upload
+            gigabit: { min: 300, max: Infinity } // All high-speed connections (300+ Mbps)
         };
         
         // AdaptiveWarmup initialized
@@ -299,12 +310,18 @@ class AdaptiveWarmup {
                 // Upload speed test - use parallel streams for high-speed detection
                 console.log(`🔧 UPLOAD SPEED TEST: Starting with targetSize=${(targetSize/1024/1024).toFixed(1)}MB, maxDuration=${maxDuration}ms`);
                 
-                // Use more aggressive parallel streams for upload speed estimation to saturate ultra-high-speed connections
-                const numParallelStreams = 8; // Increased from 3 to 8 for better 2000+ Mbps detection
-                const chunkSize = Math.min(2048 * 1024, Math.max(512 * 1024, targetSize / 40)); // 512KB-2MB chunks for high-speed
+                // Use aggressive parallel streams for upload speed estimation to detect ultra-high-speed connections
+                const numParallelStreams = 16; // Increased from 8 to 16 for better 1500+ Mbps detection
+                const chunkSize = Math.min(4096 * 1024, Math.max(1024 * 1024, targetSize / 50)); // 1MB-4MB chunks for high-speed detection
                 const chunksPerStream = Math.ceil(targetSize / (chunkSize * numParallelStreams));
                 
                 console.log(`🔧 PARALLEL UPLOAD: Using ${numParallelStreams} streams, ${chunksPerStream} chunks of ${(chunkSize/1024)}KB each per stream`);
+                
+                // 🚨 DIAGNOSTIC: Log speed estimation parameters for high-speed connections
+                const totalConcurrentUploads = numParallelStreams * chunksPerStream;
+                const totalDataMB = (targetSize / 1024 / 1024);
+                console.warn(`🚨 SPEED ESTIMATION SETUP: ${totalConcurrentUploads} total uploads, ${totalDataMB.toFixed(1)}MB total data`);
+                console.warn(`🚨 THEORETICAL CAPACITY: ${numParallelStreams} parallel streams for high-speed detection`);
                 
                 // Discovery phase - no throughput monitoring to avoid interference
                 
@@ -330,12 +347,11 @@ class AdaptiveWarmup {
                                 const response = await fetch('/upload', {
                                     method: 'POST',
                                     signal: controller.signal,
-                                    headers: {
-                                        'Content-Type': 'application/octet-stream',
+                                    headers: createUploadHeaders({
                                         'X-Speed-Test': 'true',
                                         'X-Stream-Index': streamIndex.toString(),
                                         'X-Discovery-Phase': 'true'
-                                    },
+                                    }),
                                     body: chunk
                                 });
                                 
@@ -407,10 +423,31 @@ class AdaptiveWarmup {
             if (speed < 10) tier = 'slow';        // Very slow upload: < 10 Mbps
             else if (speed < 100) tier = 'medium'; // Typical residential: 10-100 Mbps
             else if (speed < 300) tier = 'fast';   // High-speed residential: 100-300 Mbps
-            else if (speed < 700) tier = 'gigabit'; // Gigabit upload: 300-700 Mbps
-            else tier = 'ultragig';                 // Ultra-high-speed: 700+ Mbps
+            else tier = 'gigabit';                 // All high-speed connections: 300+ Mbps
             
             console.log(`🔧 INDEPENDENT UPLOAD CLASSIFICATION: ${speed.toFixed(2)} Mbps → ${tier} tier (no download dependency)`);
+            
+            // 🚨 DIAGNOSTIC: Log potential under-saturation for 300+ Mbps connections
+            if (speed >= 300) {
+                console.warn(`🚨 HIGH-SPEED DIAGNOSTIC: ${speed.toFixed(2)} Mbps connection - ${tier} tier`);
+                console.warn(`🚨 TIER ASSIGNMENT: ${tier} tier - checking if configuration is adequate`);
+                
+                const configs = this.configMatrix[this.direction][tier] || [];
+                const maxStreams = Math.max(...configs.map(c => c.streamCount || 0));
+                const maxPending = Math.max(...configs.map(c => c.pendingUploads || 0));
+                
+                console.warn(`🚨 MAX CONFIG FOR ${tier.toUpperCase()}: ${maxStreams} streams, ${maxPending} pending uploads`);
+                console.warn(`🚨 THEORETICAL MAX: ${maxStreams * maxPending} concurrent uploads`);
+                
+                // Calculate if this is sufficient for the speed
+                const estimatedThroughputPerUpload = 10; // Conservative 10 Mbps per upload
+                const theoreticalMax = maxStreams * maxPending * estimatedThroughputPerUpload;
+                console.warn(`🚨 ESTIMATED CAPACITY: ${theoreticalMax.toFixed(0)} Mbps vs required ${speed.toFixed(2)} Mbps`);
+                
+                if (theoreticalMax < speed * 1.2) { // Need 20% headroom
+                    console.error(`❌ INSUFFICIENT CAPACITY: Configuration may not saturate ${speed.toFixed(2)} Mbps connection`);
+                }
+            }
             
             // Optional: Log download speed for informational purposes only (not used for classification)
             const lastDownloadThroughput = window.lastDownloadThroughput || 0;
@@ -430,7 +467,7 @@ class AdaptiveWarmup {
         }
         
         // 🔧 DIAGNOSTIC: Log tier boundaries for reference
-        console.log(`🔧 TIER BOUNDARIES: slow(0-${this.tierBoundaries.slow.max}), medium(${this.tierBoundaries.medium.min}-${this.tierBoundaries.medium.max}), fast(${this.tierBoundaries.fast.min}-${this.tierBoundaries.fast.max}), gigabit(${this.tierBoundaries.gigabit.min}-${this.tierBoundaries.gigabit.max}), ultragig(${this.tierBoundaries.ultragig.min}+)`);
+        console.log(`🔧 TIER BOUNDARIES: slow(0-${this.tierBoundaries.slow.max}), medium(${this.tierBoundaries.medium.min}-${this.tierBoundaries.medium.max}), fast(${this.tierBoundaries.fast.min}-${this.tierBoundaries.fast.max}), gigabit(${this.tierBoundaries.gigabit.min}+)`);
         
         return tier;
     }
@@ -469,10 +506,7 @@ class AdaptiveWarmup {
                 maxConfigs = 6; // More trials for fast connections
                 break;
             case 'gigabit':
-                maxConfigs = 8; // Full trials for gigabit connections
-                break;
-            case 'ultragig':
-                maxConfigs = 12; // More trials for ultra-high-speed connections (2000+ Mbps)
+                maxConfigs = 8; // Full trials for all high-speed connections (300+ Mbps)
                 break;
             default:
                 maxConfigs = 4;
@@ -514,10 +548,7 @@ class AdaptiveWarmup {
                 chunkSizesToTest = [64 * 1024, 128 * 1024, 256 * 1024]; // 64KB, 128KB, 256KB
                 break;
             case 'gigabit':
-                chunkSizesToTest = [128 * 1024, 256 * 1024, 512 * 1024]; // 128KB, 256KB, 512KB
-                break;
-            case 'ultragig':
-                chunkSizesToTest = [512 * 1024, 1024 * 1024, 2048 * 1024]; // 512KB, 1MB, 2MB for 2000+ Mbps
+                chunkSizesToTest = [256 * 1024, 512 * 1024, 1024 * 1024, 2048 * 1024]; // 256KB, 512KB, 1MB, 2MB for high-speed
                 break;
             default:
                 chunkSizesToTest = [64 * 1024, 128 * 1024];
@@ -530,6 +561,12 @@ class AdaptiveWarmup {
         const testDuration = 1000; // 1 second per chunk size test
 
         for (const chunkSize of chunkSizesToTest) {
+            // Check for force termination at the start of each chunk size test
+            if (this.forceTermination) {
+                console.log(`🛑 CHUNK SIZE OPTIMIZATION: Force termination requested during ${chunkSize/1024}KB test`);
+                break;
+            }
+            
             console.log(`📦 Testing chunk size: ${chunkSize/1024}KB`);
             
             try {
@@ -545,18 +582,36 @@ class AdaptiveWarmup {
 
                 console.log(`📦 Chunk size ${chunkSize/1024}KB: ${result.throughput.toFixed(2)} Mbps, ${result.latency.toFixed(2)} ms`);
 
+                // 🔧 FIX: More lenient chunk size selection - prioritize throughput over strict latency requirements
+                // For high-speed connections, allow higher latency if throughput is significantly better
+                const latencyThreshold = this.speedTier === 'gigabit' ? this.baselineLatency * 4 : this.baselineLatency * 2;
+                
                 // Update best chunk size if this one performs better
-                if (result.throughput > bestThroughput && result.latency <= this.baselineLatency * 2) {
+                if (result.throughput > bestThroughput && result.latency <= latencyThreshold) {
                     bestThroughput = result.throughput;
                     bestChunkSize = chunkSize;
-                    console.log(`📦 ⭐ New best chunk size: ${chunkSize/1024}KB`);
+                    console.log(`📦 ⭐ New best chunk size: ${chunkSize/1024}KB (${result.throughput.toFixed(2)} Mbps, ${result.latency.toFixed(2)} ms)`);
+                } else if (result.throughput > 0) {
+                    console.log(`📦 Chunk size ${chunkSize/1024}KB rejected: throughput=${result.throughput.toFixed(2)} vs best=${bestThroughput.toFixed(2)}, latency=${result.latency.toFixed(2)} vs threshold=${latencyThreshold.toFixed(2)}`);
                 }
 
             } catch (error) {
                 console.warn(`📦 Chunk size ${chunkSize/1024}KB test failed:`, error);
             }
+            
+            // Check for force termination after each chunk size test
+            if (this.forceTermination) {
+                console.log(`🛑 CHUNK SIZE OPTIMIZATION: Force termination requested after ${chunkSize/1024}KB test`);
+                break;
+            }
         }
 
+        // 🔧 FIX: If no chunk size performed better than baseline, use the largest tested size for high-speed connections
+        if (bestThroughput === 0 && this.speedTier === 'gigabit' && chunkSizesToTest.length > 0) {
+            bestChunkSize = Math.max(...chunkSizesToTest);
+            console.log(`📦 ⚠️ No chunk size showed measurable improvement, using largest tested size for gigabit: ${bestChunkSize/1024}KB`);
+        }
+        
         this.optimalChunkSize = bestChunkSize;
         console.log(`📦 ✅ Optimal chunk size: ${bestChunkSize/1024}KB (${bestThroughput.toFixed(2)} Mbps)`);
 
@@ -583,22 +638,64 @@ class AdaptiveWarmup {
         const startTime = performance.now();
         let throughputMeasurements = [];
         let latencyMeasurements = [];
+        let totalBytesTransferred = 0;
         
-        // Start a single upload stream with specific chunk size
-        const streamIds = await this.startChunkSizeTestStreams(config, chunkSize);
+        // Use higher concurrency for gigabit connections during chunk size tests
+        const effectiveConfig = this.speedTier === 'gigabit'
+            ? { streamCount: 4, pendingUploads: 8 }
+            : config;
+        
+        console.log(`📦 Starting chunk size test: ${chunkSize/1024}KB with ${effectiveConfig.streamCount} streams, ${effectiveConfig.pendingUploads} pending uploads`);
+        
+        // Start upload streams with effective configuration
+        const streamIds = await this.startChunkSizeTestStreams(effectiveConfig, chunkSize);
+        
+        if (streamIds.length === 0) {
+            console.warn(`📦 No streams started for chunk size ${chunkSize/1024}KB test`);
+            return { throughput: 0, latency: this.baselineLatency, chunkSize: chunkSize };
+        }
         
         // Allow stream to stabilize
-        await new Promise(resolve => setTimeout(resolve, 200));
+        await new Promise(resolve => setTimeout(resolve, 300)); // Increased stabilization time
         
         // Monitor for specified duration
         const monitoringInterval = 100; // Check every 100ms
+        let measurementCount = 0;
+        
         while ((performance.now() - startTime) < duration) {
             await new Promise(resolve => setTimeout(resolve, monitoringInterval));
+            measurementCount++;
             
-            // Collect throughput measurement
-            const currentThroughput = this.getCurrentThroughput();
+            // Collect throughput measurement with fallback calculation
+            let currentThroughput = this.getCurrentThroughput();
+            
+            // 🔧 FIX: If throughputTracker returns 0, calculate throughput manually from stream data
+            if (currentThroughput <= 0) {
+                // Try to get bytes transferred from active streams
+                let streamBytes = 0;
+                for (const streamId of streamIds) {
+                    const streamMap = StreamManager.streams['upload'];
+                    if (streamMap) {
+                        const stream = streamMap.get(streamId);
+                        if (stream && stream.bytesSent) {
+                            streamBytes += stream.bytesSent;
+                        }
+                    }
+                }
+                
+                if (streamBytes > totalBytesTransferred) {
+                    const deltaBytes = streamBytes - totalBytesTransferred;
+                    const deltaTime = monitoringInterval / 1000; // Convert to seconds
+                    currentThroughput = (deltaBytes * 8) / (deltaTime * 1000000); // Convert to Mbps
+                    totalBytesTransferred = streamBytes;
+                    
+                    console.log(`📦 Manual throughput calculation: ${deltaBytes} bytes in ${deltaTime}s = ${currentThroughput.toFixed(2)} Mbps`);
+                }
+            }
+            
             if (currentThroughput > 0) {
                 throughputMeasurements.push(currentThroughput);
+                console.log(`📦 Measurement ${measurementCount}: ${currentThroughput.toFixed(2)} Mbps`);
             }
             
             // Collect latency measurement
@@ -619,6 +716,8 @@ class AdaptiveWarmup {
         const avgLatency = latencyMeasurements.length > 0
             ? latencyMeasurements.reduce((a, b) => a + b) / latencyMeasurements.length
             : this.baselineLatency;
+        
+        console.log(`📦 Chunk size ${chunkSize/1024}KB test complete: ${throughputMeasurements.length} throughput measurements, avg=${avgThroughput.toFixed(2)} Mbps`);
         
         return {
             throughput: avgThroughput,
@@ -677,12 +776,21 @@ class AdaptiveWarmup {
         console.log(`⚙️ Stage 2: Starting parameter optimization for ${this.speedTier} tier`);
         
         const maxTrials = Math.min(this.candidateConfigs.length, 6); // Max 6 trials for 5.25-second window
-        const trialDuration = 400; // 0.4 seconds per trial for faster optimization
+        const trialDuration = 600; // 0.6 seconds per trial for better optimization
         let bestConfig = null;
         let bestScore = -1;
         let consecutiveDeclines = 0;
         
         console.log(`Testing ${maxTrials} configurations, ${trialDuration}ms each`);
+        
+        // 🚨 DIAGNOSTIC: Log all configurations that will be tested for high-speed connections
+        if (this.estimatedSpeed >= 500) {
+            console.warn(`🚨 HIGH-SPEED OPTIMIZATION: Testing configurations for ${this.estimatedSpeed.toFixed(2)} Mbps connection`);
+            this.candidateConfigs.forEach((config, index) => {
+                const concurrentUploads = config.streamCount * (config.pendingUploads || 1);
+                console.warn(`🚨 CONFIG ${index + 1}: ${config.streamCount} streams × ${config.pendingUploads || 1} pending = ${concurrentUploads} concurrent uploads`);
+            });
+        }
         
         // Update UI status for parameter optimization
         updateParameterOptimizationStatus(this.direction, {
@@ -691,6 +799,12 @@ class AdaptiveWarmup {
         });
         
         for (let i = 0; i < maxTrials; i++) {
+            // Check for force termination at the start of each trial
+            if (this.forceTermination) {
+                console.log(`🛑 PARAMETER OPTIMIZATION: Force termination requested during trial ${i + 1}`);
+                break;
+            }
+            
             const config = this.candidateConfigs[i];
             
             // Update UI status for current trial
@@ -721,6 +835,20 @@ class AdaptiveWarmup {
                 console.log(`   Result: ${result.throughput.toFixed(2)} Mbps, ${result.latency.toFixed(2)} ms`);
                 console.log(`   Score: ${scoring.score.toFixed(3)} (throughput: ${scoring.throughputComponent.toFixed(3)}, latency: ${scoring.latencyComponent.toFixed(3)})`);
                 
+                // 🚨 DIAGNOSTIC: Flag insufficient throughput for high-speed connections
+                if (this.estimatedSpeed >= 500) {
+                    const throughputEfficiency = (result.throughput / this.estimatedSpeed) * 100;
+                    const concurrentUploads = config.streamCount * (config.pendingUploads || 1);
+                    
+                    console.warn(`🚨 HIGH-SPEED RESULT: ${throughputEfficiency.toFixed(1)}% efficiency (${result.throughput.toFixed(2)}/${this.estimatedSpeed.toFixed(2)} Mbps)`);
+                    console.warn(`🚨 CONCURRENT UPLOADS: ${concurrentUploads} uploads achieved ${result.throughput.toFixed(2)} Mbps`);
+                    
+                    if (throughputEfficiency < 70) {
+                        console.error(`❌ INSUFFICIENT THROUGHPUT: Only ${throughputEfficiency.toFixed(1)}% of estimated ${this.estimatedSpeed.toFixed(2)} Mbps`);
+                        console.error(`❌ POSSIBLE CAUSES: Insufficient parallelism (${concurrentUploads} uploads), rate limiting, or network constraints`);
+                    }
+                }
+                
                 // Update best configuration if this one is better
                 if (scoring.acceptable && scoring.score > bestScore) {
                     bestScore = scoring.score;
@@ -728,8 +856,8 @@ class AdaptiveWarmup {
                     consecutiveDeclines = 0; // Reset decline counter
                     console.log(`   ⭐ New best configuration!`);
                     
-                    // Early termination if we achieve 85%+ of estimated bandwidth (optimized threshold)
-                    if (scoring.throughputComponent >= 0.85) {
+                    // Early termination if we achieve 95%+ of estimated bandwidth (higher threshold for better optimization)
+                    if (scoring.throughputComponent >= 0.95) {
                         console.log(`🎯 Early termination: achieved ${(scoring.throughputComponent * 100).toFixed(1)}% bandwidth efficiency`);
                         break;
                     }
@@ -758,6 +886,12 @@ class AdaptiveWarmup {
                     error: error.message,
                     trialIndex: i
                 });
+            }
+            
+            // Check for force termination after each trial
+            if (this.forceTermination) {
+                console.log(`🛑 PARAMETER OPTIMIZATION: Force termination requested after trial ${i + 1}`);
+                break;
             }
         }
         
@@ -847,7 +981,7 @@ class AdaptiveWarmup {
                 const options = {
                     isSpeedTest: true,
                     addDelay: false,
-                    chunkSize: 64 * 1024, // 64KB chunks
+                    chunkSize: this.optimalChunkSize, // Use discovered optimal chunk size
                     isDiscovery: false  // Adaptive warmup streams are NOT discovery phase
                 };
                 
@@ -1028,6 +1162,14 @@ class AdaptiveWarmup {
      */
     getDefaultConfigForTier(tier) {
         const configs = this.configMatrix[this.direction][tier] || this.configMatrix[this.direction]['medium'];
+        
+        // 🔧 FIX: For ultra-high-speed connections (600+ Mbps), use more aggressive default config
+        if (tier === 'gigabit' && this.direction === 'upload' && this.estimatedSpeed >= 600) {
+            console.log(`🚀 ULTRA-HIGH-SPEED DEFAULT: Using aggressive config for ${this.estimatedSpeed.toFixed(2)} Mbps connection`);
+            // Use 16 streams × 8 pending = 128 concurrent uploads for 600+ Mbps connections
+            return { streamCount: 16, pendingUploads: 8 };
+        }
+        
         return configs[0] || { streamCount: 2, pendingUploads: 2 };
     }
     
@@ -1085,17 +1227,74 @@ class AdaptiveWarmup {
      */
     async run() {
         try {
-            console.log(`🚀 ADAPTIVE WARMUP ENTRY POINT: Starting 5.25-second Adaptive Warmup for ${this.direction}`);
+            console.log(`🚀 ADAPTIVE WARMUP ENTRY POINT: Starting Phase-Aware Adaptive Warmup for ${this.direction}`);
             console.log(`🔧 ADAPTIVE WARMUP: Checking dependencies...`);
             
-            // 🔧 FIX: Use phase-relative timing for upload phases
-            // For download: use test-relative timing (this.startTime + 5250)
-            // For upload: use current-time-relative timing (performance.now() + 5250)
-            const adaptiveWarmupDeadline = this.direction === 'upload'
-                ? performance.now() + 5250  // 5.25 seconds from NOW for upload phases
-                : this.startTime + 5250;    // 5.25 seconds from test start for download phase
+            // Add phase change listener to ensure we terminate when phase changes
+            this.phaseChangeListener = (event) => {
+                const newPhase = event.detail.phase;
+                console.log(`🔧 ADAPTIVE WARMUP: Phase change detected - ${newPhase}`);
+                
+                // If we're in upload warmup and phase changes to upload saturation, terminate immediately
+                if (this.direction === 'upload' && newPhase === 'UPLOAD') {
+                    console.log(`🛑 ADAPTIVE WARMUP: Upload phase started, terminating adaptive warmup immediately`);
+                    this.forceTermination = true;
+                }
+                // If we're in download warmup and phase changes to download saturation, terminate immediately
+                else if (this.direction === 'download' && newPhase === 'DOWNLOAD') {
+                    console.log(`🛑 ADAPTIVE WARMUP: Download phase started, terminating adaptive warmup immediately`);
+                    this.forceTermination = true;
+                }
+            };
             
-            console.log(`🔧 ADAPTIVE WARMUP DEADLINE: ${this.direction === 'upload' ? 'Phase-relative' : 'Test-relative'} timing - ${(adaptiveWarmupDeadline - performance.now())/1000}s remaining`);
+            window.addEventListener('test:phaseChange', this.phaseChangeListener);
+            
+            // 🔧 FIX: Use phase-relative timing that respects actual phase boundaries
+            // For download: use test-relative timing (this.startTime + 5250)
+            // For upload: calculate deadline based on remaining time in the warmup phase
+            let adaptiveWarmupDeadline;
+            
+            if (this.direction === 'upload') {
+                // For upload, calculate deadline based on remaining warmup phase time
+                // Upload warmup phase is 13 seconds total, but we need to leave time for stabilization
+                // Use maximum of 10 seconds for adaptive warmup, leaving 3 seconds for stabilization
+                const maxAdaptiveWarmupDuration = 10000; // 10 seconds max
+                const currentTime = performance.now();
+                
+                // Check if we have phase timing information
+                if (window.getCurrentPhase && window.getElapsedTime) {
+                    const currentPhase = window.getCurrentPhase();
+                    const elapsedTime = window.getElapsedTime();
+                    
+                    if (currentPhase === 'UPLOAD_WARMUP') {
+                        // Upload warmup starts at 23s and ends at 36s (13s duration)
+                        const uploadWarmupStartTime = 23000; // 23 seconds
+                        const uploadWarmupEndTime = 36000;   // 36 seconds
+                        const testStartTime = currentTime - (elapsedTime * 1000);
+                        const phaseEndTime = testStartTime + uploadWarmupEndTime;
+                        const remainingPhaseTime = phaseEndTime - currentTime;
+                        
+                        // Use 80% of remaining phase time for adaptive warmup, leaving 20% for stabilization
+                        const adaptiveWarmupTime = Math.min(maxAdaptiveWarmupDuration, remainingPhaseTime * 0.8);
+                        adaptiveWarmupDeadline = currentTime + adaptiveWarmupTime;
+                        
+                        console.log(`🔧 UPLOAD WARMUP TIMING: Phase ends in ${(remainingPhaseTime/1000).toFixed(1)}s, using ${(adaptiveWarmupTime/1000).toFixed(1)}s for adaptive warmup`);
+                    } else {
+                        // Fallback: use fixed duration
+                        adaptiveWarmupDeadline = currentTime + Math.min(maxAdaptiveWarmupDuration, 5250);
+                        console.log(`🔧 UPLOAD WARMUP FALLBACK: Using ${Math.min(maxAdaptiveWarmupDuration, 5250)/1000}s fixed duration`);
+                    }
+                } else {
+                    // Fallback: use fixed duration
+                    adaptiveWarmupDeadline = currentTime + Math.min(maxAdaptiveWarmupDuration, 5250);
+                    console.log(`🔧 UPLOAD WARMUP FALLBACK: No phase timing available, using ${Math.min(maxAdaptiveWarmupDuration, 5250)/1000}s fixed duration`);
+                }
+            } else {
+                // For download: use test-relative timing (original logic)
+                adaptiveWarmupDeadline = this.startTime + 5250;
+            }
+
+            console.log(`🔧 ADAPTIVE WARMUP DEADLINE: ${this.direction === 'upload' ? 'Phase-aware' : 'Test-relative'} timing - ${(adaptiveWarmupDeadline - performance.now())/1000}s remaining`);
             
             // Check if throughputTracker is available
             if (typeof throughputTracker === 'undefined') {
@@ -1107,6 +1306,13 @@ class AdaptiveWarmup {
             // Stage 1: Speed Estimation (2-3 seconds)
             console.log(`🎯 Stage 1: Starting speed estimation`);
             await this.estimateConnectionSpeed();
+            
+            // Check for force termination after speed estimation
+            if (this.forceTermination) {
+                console.log(`🛑 ADAPTIVE WARMUP: Force termination requested after speed estimation`);
+                return this.getDefaultConfigForTier('medium');
+            }
+            
             this.speedTier = this.classifySpeedTier(this.estimatedSpeed);
             console.log(`📊 Classified as ${this.speedTier} tier (${this.estimatedSpeed.toFixed(2)} Mbps)`);
             
@@ -1115,10 +1321,17 @@ class AdaptiveWarmup {
             const remainingTime = adaptiveWarmupDeadline - timeAfterEstimation;
             console.log(`⏱️ Time remaining for optimization: ${(remainingTime/1000).toFixed(1)}s`);
             
-            if (remainingTime > 2000) { // At least 2 seconds remaining
+            if (remainingTime > 2000 && !this.forceTermination) { // At least 2 seconds remaining and not terminated
                 // Stage 1.5: Chunk Size Optimization (for upload only)
                 console.log(`📦 Stage 1.5: Starting chunk size optimization`);
                 await this.optimizeChunkSize();
+                
+                // Check for force termination after chunk size optimization
+                if (this.forceTermination) {
+                    console.log(`🛑 ADAPTIVE WARMUP: Force termination requested after chunk size optimization`);
+                    return this.getDefaultConfigForTier(this.speedTier);
+                }
+                
                 console.log(`📦 Chunk size optimization complete: ${this.optimalChunkSize/1024}KB`);
                 
                 // 🔧 CRITICAL: Clean up all discovery streams before parameter optimization
@@ -1138,9 +1351,16 @@ class AdaptiveWarmup {
                 const timeBeforeOptimization = performance.now();
                 const optimizationTimeRemaining = adaptiveWarmupDeadline - timeBeforeOptimization;
                 
-                if (optimizationTimeRemaining > 1000) { // At least 1 second remaining
+                if (optimizationTimeRemaining > 1000 && !this.forceTermination) { // At least 1 second remaining and not terminated
                     console.log(`⚙️ Stage 2: Starting parameter optimization with ${(optimizationTimeRemaining/1000).toFixed(1)}s remaining`);
                     const optimalConfig = await this.optimizeParameters();
+                    
+                    // Check for force termination after parameter optimization
+                    if (this.forceTermination) {
+                        console.log(`🛑 ADAPTIVE WARMUP: Force termination requested after parameter optimization`);
+                        return this.optimalConfig || this.getDefaultConfigForTier(this.speedTier);
+                    }
+                    
                     console.log(`✅ Parameter optimization complete`);
                 } else {
                     console.log(`⚠️ Insufficient time for parameter optimization, using default config`);
@@ -1195,6 +1415,12 @@ class AdaptiveWarmup {
             
             console.log(`🔄 Fallback config due to error`);
             return fallbackConfig;
+        } finally {
+            // Clean up phase change listener
+            if (this.phaseChangeListener) {
+                window.removeEventListener('test:phaseChange', this.phaseChangeListener);
+                console.log(`🧹 ADAPTIVE WARMUP: Cleaned up phase change listener`);
+            }
         }
     }
     
@@ -1208,11 +1434,36 @@ class AdaptiveWarmup {
         const stabilizationStart = performance.now();
         
         // 🔧 FIX: Use phase-relative timing for upload phases in stabilization calculation
-        const warmupPhaseEnd = this.direction === 'upload'
-            ? stabilizationStart + (adaptiveWarmupDeadline - stabilizationStart) // Use remaining time from adaptive warmup deadline
-            : this.startTime + 5250; // 5.25 seconds total warmup for download (test-relative)
-            
-        const stabilizationDuration = warmupPhaseEnd - Math.max(stabilizationStart, adaptiveWarmupDeadline);
+        let warmupPhaseEnd;
+        
+        if (this.direction === 'upload') {
+            // For upload, calculate the actual phase end time to ensure we don't bleed into saturation phase
+            if (window.getCurrentPhase && window.getElapsedTime) {
+                const currentPhase = window.getCurrentPhase();
+                const elapsedTime = window.getElapsedTime();
+                
+                if (currentPhase === 'UPLOAD_WARMUP') {
+                    // Upload warmup ends at 36 seconds
+                    const uploadWarmupEndTime = 36000; // 36 seconds
+                    const currentTime = performance.now();
+                    const testStartTime = currentTime - (elapsedTime * 1000);
+                    warmupPhaseEnd = testStartTime + uploadWarmupEndTime;
+                    
+                    console.log(`🔧 STABILIZATION TIMING: Phase ends at ${(warmupPhaseEnd - testStartTime)/1000}s, current time ${elapsedTime.toFixed(1)}s`);
+                } else {
+                    // Fallback: use adaptive warmup deadline
+                    warmupPhaseEnd = adaptiveWarmupDeadline;
+                }
+            } else {
+                // Fallback: use adaptive warmup deadline
+                warmupPhaseEnd = adaptiveWarmupDeadline;
+            }
+        } else {
+            // For download: use test-relative timing (original logic)
+            warmupPhaseEnd = this.startTime + 5250;
+        }
+
+        const stabilizationDuration = Math.max(0, warmupPhaseEnd - stabilizationStart);
         
         if (stabilizationDuration > 1000) { // At least 1 second of stabilization
             console.log(`🔄 STABILIZATION PHASE: Starting ${(stabilizationDuration/1000).toFixed(1)}s stabilization with optimal parameters`);

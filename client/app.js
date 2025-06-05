@@ -117,6 +117,16 @@ async function init() {
     // Initialize UI
     initUI();
     
+    // 🔧 STREAM DEBUG OVERLAY FIX: Hide any existing stream debug overlay on initialization
+    const existingDebugElement = document.getElementById('streamDebug');
+    if (existingDebugElement) {
+        existingDebugElement.style.display = 'none';
+        console.log('🔧 Hidden existing stream debug overlay');
+    }
+    
+    // Disable debug mode to prevent stream overlay from appearing
+    window.debugMode = false;
+    
     // Create charts
     latencyChart = createLatencyChart('latencyChart');
     throughputChart = createThroughputChart('throughputChart');
@@ -192,6 +202,9 @@ function handlePhaseControllerEvent(event) {
 function handleStreamLifecycleEvent(event) {
     const { type, streamId, streamType, timestamp } = event.detail;
     
+    // 🔧 STREAM DEBUG OVERLAY DISABLED: Commenting out debug overlay to prevent UI blocking
+    // The stream debug overlay was blocking the Download Logs button
+    /*
     // Log to UI if in debug mode
     if (window.debugMode) {
         const debugElement = document.getElementById('streamDebug') || createStreamDebugElement();
@@ -205,6 +218,13 @@ function handleStreamLifecycleEvent(event) {
             debugElement.removeChild(debugElement.firstChild);
         }
     }
+    */
+    
+    // Hide any existing stream debug overlay
+    const existingDebugElement = document.getElementById('streamDebug');
+    if (existingDebugElement) {
+        existingDebugElement.style.display = 'none';
+    }
 }
 
 /**
@@ -214,6 +234,8 @@ function handleStreamLifecycleEvent(event) {
 function handleStreamResetEvent(event) {
     const { timestamp } = event.detail;
     
+    // 🔧 STREAM DEBUG OVERLAY DISABLED: Commenting out debug overlay to prevent UI blocking
+    /*
     // Log to UI if in debug mode
     if (window.debugMode) {
         const debugElement = document.getElementById('streamDebug') || createStreamDebugElement();
@@ -223,6 +245,13 @@ function handleStreamResetEvent(event) {
         entry.style.color = 'red';
         entry.style.fontWeight = 'bold';
         debugElement.appendChild(entry);
+    }
+    */
+    
+    // Hide any existing stream debug overlay
+    const existingDebugElement = document.getElementById('streamDebug');
+    if (existingDebugElement) {
+        existingDebugElement.style.display = 'none';
     }
 }
 

@@ -6,6 +6,25 @@
 import { generateTestData as xoshiroGenerateTestData, getPooledTestData, initializeDataPools } from './xoshiro.js';
 import { logWithLevel } from './config.js';
 
+/**
+ * Create standardized headers for upload requests to ensure TCP connection reuse
+ * @param {Object} additionalHeaders - Optional additional headers to include
+ * @returns {Object} Standardized headers object
+ */
+function createUploadHeaders(additionalHeaders = {}) {
+    const baseHeaders = {
+        'Content-Type': 'application/octet-stream',
+        'Connection': 'keep-alive',
+        'Keep-Alive': 'timeout=30, max=100',
+        'Cache-Control': 'no-store',
+        'Pragma': 'no-cache',
+        'Accept-Encoding': 'identity'  // Request no compression for optimal connection reuse
+    };
+    
+    // Merge additional headers while preserving base headers for connection reuse
+    return { ...baseHeaders, ...additionalHeaders };
+}
+
 // Logging control - set to false to reduce console spam for production
 const VERBOSE_LOGGING = false;
 
@@ -281,13 +300,12 @@ class StreamManager {
                     response = await fetch('/upload', {
                         method: 'POST',
                         signal,
-                        headers: {
-                            'Content-Type': 'application/octet-stream',
+                        headers: createUploadHeaders({
                             'X-Stream-ID': stream.id,
                             'X-Priority': 'low',
                             'X-Retry-Count': retries.toString(),
                             ...(stream.isSpeedTest && { 'X-Speed-Test': 'true' })
-                        },
+                        }),
                         body: chunk
                     });
                     
@@ -670,17 +688,14 @@ class StreamManager {
         } else {
             // For full test, use the optimal chunk size from adaptive warmup, not discovery phase
             // This ensures we use the 2MB optimal size instead of the 128KB discovery fallback
-            let targetChunkSize = finalUploadDiscoveryChunkSize;
+            let targetChunkSize = window.optimalUploadChunkSize ||
+                                  (window.adaptiveWarmupResults && window.adaptiveWarmupResults.optimalChunkSize) ||
+                                  finalUploadDiscoveryChunkSize;
             
-            // Check if adaptive warmup determined a better chunk size
-            if (window.optimalUploadChunkSize && window.optimalUploadChunkSize > targetChunkSize) {
-                targetChunkSize = window.optimalUploadChunkSize;
-                console.log(`🔧 CHUNK SIZE FIX: Using adaptive warmup optimal chunk size: ${Math.round(targetChunkSize/1024)}KB instead of discovery ${Math.round(finalUploadDiscoveryChunkSize/1024)}KB`);
-            } else if (window.adaptiveWarmupResults && window.adaptiveWarmupResults.optimalChunkSize && window.adaptiveWarmupResults.optimalChunkSize > targetChunkSize) {
-                targetChunkSize = window.adaptiveWarmupResults.optimalChunkSize;
-                console.log(`🔧 CHUNK SIZE FIX: Using adaptive warmup results optimal chunk size: ${Math.round(targetChunkSize/1024)}KB instead of discovery ${Math.round(finalUploadDiscoveryChunkSize/1024)}KB`);
-            } else {
-                console.log(`🔧 CHUNK SIZE DEBUG: window.optimalUploadChunkSize=${window.optimalUploadChunkSize}, targetChunkSize=${Math.round(targetChunkSize/1024)}KB, finalUploadDiscoveryChunkSize=${Math.round(finalUploadDiscoveryChunkSize/1024)}KB`);
+            if (VERBOSE_LOGGING) {
+                const source = window.optimalUploadChunkSize ? "adaptive warmup" :
+                              (window.adaptiveWarmupResults?.optimalChunkSize ? "adaptive warmup results" : "discovery phase");
+                console.log(`🔧 CHUNK SIZE: Using ${Math.round(targetChunkSize/1024)}KB from ${source}`);
             }
             
             // Adding more chunks using optimal chunk size

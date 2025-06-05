@@ -19,8 +19,12 @@ export function initializeShareSystem(data, containerId) {
         shareBtn = createShareButton(container);
     }
 
-    // Add click event listener
-    shareBtn.addEventListener('click', () => handleShareClick(data));
+    // Remove any existing event listeners by cloning the button
+    const newShareBtn = shareBtn.cloneNode(true);
+    shareBtn.parentNode.replaceChild(newShareBtn, shareBtn);
+
+    // Add click event listener with button reference
+    newShareBtn.addEventListener('click', () => handleShareClick(data, newShareBtn));
 }
 
 /**
@@ -69,9 +73,9 @@ function createShareButton(container) {
 /**
  * Handle share button click
  * @param {Object} data - Unified result data
+ * @param {HTMLElement} shareBtn - The specific share button that was clicked
  */
-async function handleShareClick(data) {
-    const shareBtn = document.getElementById('shareResultBtn');
+async function handleShareClick(data, shareBtn) {
     if (!shareBtn) return;
 
     const originalText = shareBtn.innerHTML;
@@ -190,9 +194,9 @@ function createSingleUserShareContent(data) {
     const phasesHTML = data.phases
         .filter(phase => phase.showInShareImage)
         .map(phase => `
-            <div class="grade-box" style="text-align: center; margin: 10px; flex: 1;">
+            <div class="grade-box" style="text-align: center; background: rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 15px; min-width: 120px; max-width: 140px;">
                 <h3 style="margin: 0 0 8px 0; font-size: 14px; color: rgba(255, 255, 255, 0.8);">${phase.name}</h3>
-                <div class="grade ${phase.cssClass}" style="font-size: 24px; font-weight: bold; margin-bottom: 4px;">${phase.grade}</div>
+                <div class="grade ${phase.cssClass}" style="font-size: 28px; font-weight: bold; margin-bottom: 6px;">${phase.grade}</div>
                 <p style="font-size: 12px; color: rgba(255, 255, 255, 0.7); margin: 0;">${phase.metric}</p>
             </div>
         `).join('');
@@ -215,7 +219,7 @@ function createSingleUserShareContent(data) {
         
         <div class="individual-grades-section">
             <h3 style="text-align: center; margin: 0 0 15px 0; font-size: 16px; color: rgba(255, 255, 255, 0.9);">Individual Phase Grades</h3>
-            <div style="display: flex; justify-content: space-between;">
+            <div style="display: flex; justify-content: center; gap: 15px; flex-wrap: wrap;">
                 ${phasesHTML}
             </div>
         </div>
@@ -236,9 +240,9 @@ function createVirtualHouseholdShareContent(data) {
     const phasesHTML = data.phases
         .filter(phase => phase.showInShareImage)
         .map(phase => `
-            <div class="grade-box" style="text-align: center; margin: 10px; flex: 1;">
+            <div class="grade-box" style="text-align: center; background: rgba(255, 255, 255, 0.1); border-radius: 8px; padding: 15px; min-width: 120px; max-width: 140px;">
                 <h3 style="margin: 0 0 8px 0; font-size: 14px; color: rgba(255, 255, 255, 0.8);">${phase.name}</h3>
-                <div class="grade ${phase.cssClass}" style="font-size: 24px; font-weight: bold; margin-bottom: 4px;">${phase.grade}</div>
+                <div class="grade ${phase.cssClass}" style="font-size: 28px; font-weight: bold; margin-bottom: 6px;">${phase.grade}</div>
                 <p style="font-size: 12px; color: rgba(255, 255, 255, 0.7); margin: 0;">${phase.metric}</p>
             </div>
         `).join('');
@@ -261,7 +265,7 @@ function createVirtualHouseholdShareContent(data) {
         
         <div class="individual-grades-section">
             <h3 style="text-align: center; margin: 0 0 15px 0; font-size: 16px; color: rgba(255, 255, 255, 0.9);">Network Performance Metrics</h3>
-            <div style="display: flex; justify-content: space-between;">
+            <div style="display: flex; justify-content: center; gap: 15px; flex-wrap: wrap;">
                 ${phasesHTML}
             </div>
         </div>

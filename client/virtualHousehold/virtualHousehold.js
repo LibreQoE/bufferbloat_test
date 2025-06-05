@@ -9,6 +9,7 @@ import UIHousehold from './uiHousehold.js';
 class VirtualHousehold {
     constructor() {
         this.isActive = false;
+        this.isCompleting = false; // Guard against multiple completion calls
         this.testDuration = 30000; // 30 seconds
         this.startTime = null;
         this.latencyTracker = null;
@@ -383,6 +384,9 @@ class VirtualHousehold {
     }
     
     async startAdaptiveTest() {
+        this.logger.log('🔍 DIAGNOSTIC: startAdaptiveTest() called, isActive:', this.isActive);
+        this.logger.log('🔍 DIAGNOSTIC: Current websocketConnections size:', this.websocketConnections.size);
+        
         if (this.isActive) {
             this.logger.warn('Test already running - forcing reset');
             await this.stopTest();
@@ -448,16 +452,24 @@ class VirtualHousehold {
     
     async startHouseholdPhase() {
         // This method is called by the adaptive controller for Phase 2
-        if (this.isActive) {
-            this.logger.warn('Test already running - forcing reset');
+        this.logger.log('🔍 DIAGNOSTIC: startHouseholdPhase() called, isActive:', this.isActive);
+        this.logger.log('🔍 DIAGNOSTIC: Current websocketConnections size:', this.websocketConnections.size);
+        
+        // PHASE TRANSITION FIX: Don't reset if this is a legitimate phase transition
+        // Only reset if there are existing WebSocket connections (indicating a real conflict)
+        if (this.isActive && this.websocketConnections.size > 0) {
+            this.logger.warn('Test already running with active connections - forcing reset');
             await this.stopTest();
             // Wait a moment for cleanup to complete
             await new Promise(resolve => setTimeout(resolve, 500));
+        } else if (this.isActive) {
+            this.logger.log('🔄 PHASE TRANSITION: isActive=true but no WebSocket connections - continuing with Phase 2');
         }
         
         this.logger.log('🏠 Starting Phase 2: Virtual Household Simulation with detected connection speed');
         this.isActive = true;
         this.startTime = performance.now();
+        this.testStartTime = this.startTime; // Store for test-specific identifiers
         
         try {
             // Dispatch test start event for UI
@@ -508,11 +520,29 @@ class VirtualHousehold {
         this.logger.log('👥 Initializing Simple Multi-Process WebSocket connections');
         this.logger.log('🌐 Each user gets dedicated connection with separate WebSocket handling');
         
+        // DIAGNOSTIC: Check for competing WebSocket implementations
+        this.logger.log('🔍 DIAGNOSTIC: Checking for competing WebSocket implementations...');
+        this.logger.log('🔍 DIAGNOSTIC: window.WebSocketManager exists?', typeof window.WebSocketManager);
+        this.logger.log('🔍 DIAGNOSTIC: Current websocketConnections size:', this.websocketConnections.size);
+        this.logger.log('🔍 DIAGNOSTIC: Existing connections:', Array.from(this.websocketConnections.keys()));
+        
+        // GUARD: Prevent multiple connection attempts
+        if (this.websocketConnections.size > 0) {
+            this.logger.warn('⚠️ DIAGNOSTIC: WebSocket connections already exist - clearing before creating new ones');
+            for (const [userId, ws] of this.websocketConnections) {
+                if (ws.readyState === WebSocket.OPEN) {
+                    this.logger.log(`🔨 DIAGNOSTIC: Force closing existing connection for ${userId}`);
+                    ws.close(1000, 'Reinitializing connections');
+                }
+            }
+            this.websocketConnections.clear();
+        }
+        
         for (const [userId, config] of Object.entries(this.userConfigs)) {
             try {
                 this.logger.log(`🔧 Initializing dedicated connection for ${userId}...`);
                 
-                // Step 1: Get redirect information from main server
+                // Step 1: Get redirect information from main server (but don't create session)
                 const redirectUrl = `${window.location.protocol}//${window.location.host}/ws/virtual-household/${userId}`;
                 this.logger.log(`🔀 Getting redirect info from: ${redirectUrl}`);
                 
@@ -528,14 +558,21 @@ class VirtualHousehold {
                     throw new Error(`Invalid redirect response: ${JSON.stringify(redirectInfo)}`);
                 }
                 
-                // Step 2: Connect to the dedicated user process WebSocket
+                // Step 2: Connect directly to the dedicated user process WebSocket
                 const wsUrl = redirectInfo.websocket_url;
                 this.logger.log(`🌐 Connecting to dedicated ${userId} connection: ${wsUrl}`);
                 this.logger.log(`🔍 DEBUG: Dedicated WebSocket URL for ${userId}: ${wsUrl}`);
                 this.logger.log(`🔍 DEBUG: Port: ${redirectInfo.port}, Architecture: ${redirectInfo.architecture}`);
                 this.logger.log(`🔍 DEBUG: Dedicated connection enabled: ${redirectInfo.process_isolation}`);
                 
+                // DIAGNOSTIC: Track WebSocket creation
+                this.logger.log(`🔍 DIAGNOSTIC: About to create WebSocket for ${userId} at ${wsUrl}`);
+                this.logger.log(`🔍 DIAGNOSTIC: Current timestamp: ${Date.now()}`);
+                this.logger.log(`🔍 DIAGNOSTIC: Existing connections before creation:`, Array.from(this.websocketConnections.keys()));
+                
                 const websocket = new WebSocket(wsUrl);
+                
+                this.logger.log(`🔍 DIAGNOSTIC: WebSocket created for ${userId}, readyState: ${websocket.readyState}`);
                 
                 websocket.onopen = () => {
                     this.logger.log(`✅ Dedicated WebSocket connected for ${userId}`);
@@ -637,8 +674,14 @@ class VirtualHousehold {
                     }
                 };
                 
+                // DIAGNOSTIC: Track connection storage
+                this.logger.log(`🔍 DIAGNOSTIC: About to store WebSocket for ${userId} in connections map`);
+                this.logger.log(`🔍 DIAGNOSTIC: Map size before storing: ${this.websocketConnections.size}`);
+                
                 this.websocketConnections.set(userId, websocket);
                 
+                this.logger.log(`🔍 DIAGNOSTIC: WebSocket stored for ${userId}, map size now: ${this.websocketConnections.size}`);
+                this.logger.log(`🔍 DIAGNOSTIC: All connections in map:`, Array.from(this.websocketConnections.keys()));
                 this.logger.log(`✅ Initialized dedicated connection for ${userId} on port ${redirectInfo.port}`);
                 
             } catch (error) {
@@ -991,6 +1034,7 @@ class VirtualHousehold {
         switch (data.type) {
             case 'session_info':
                 this.logger.log(`📋 Session info for ${userId}:`, data);
+                // Note: Session info received but not used due to architecture limitations
                 break;
             case 'real_time_update':
                 this.handleRealTimeUpdate(userId, data);
@@ -1377,48 +1421,200 @@ class VirtualHousehold {
     }
     
     async completeTest() {
+        // RACE CONDITION GUARD: Prevent multiple simultaneous completion calls
+        if (this.isCompleting) {
+            console.log('⚠️ RACE CONDITION PREVENTED: completeTest() already in progress');
+            if (this.logger && this.logger.warn) this.logger.warn('⚠️ RACE CONDITION PREVENTED: completeTest() already in progress');
+            return;
+        }
+        
+        this.isCompleting = true;
+        
+        // Robust logging that won't fail if logger is undefined
+        if (this.logger && this.logger.log) {
+            this.logger.log('🏁 STARTING completeTest() method');
+        }
+        console.log('🏁 ENHANCED completeTest() method starting');
         console.log('🏁 Completing Virtual Household Test');
         
         try {
             // Stop throughput calculation timer
+            console.log('🛑 Stopping throughput calculation timer...');
+            if (this.logger && this.logger.log) this.logger.log('🛑 Stopping throughput calculation timer...');
             this.stopThroughputCalculationTimer();
             
-            // Send stop signal to all server processes before closing connections
+            // CRITICAL: Send stop signals to all server processes FIRST
+            console.log(`🔍 Found ${this.websocketConnections.size} WebSocket connections to close`);
+            if (this.logger && this.logger.log) this.logger.log(`🔍 Found ${this.websocketConnections.size} WebSocket connections to close`);
+            
+            if (this.websocketConnections.size === 0) {
+                console.warn('⚠️ No WebSocket connections found - this may indicate a problem');
+                if (this.logger && this.logger.warn) this.logger.warn('⚠️ No WebSocket connections found - this may indicate a problem');
+            }
+            
+            const stopPromises = [];
+            
+            // MULTI-USER SAFE APPROACH: Only close the WebSocket connections for THIS test instance
+            // The server bug where sessions don't clean up on disconnect is a server-side issue
+            // that needs to be fixed on the server side. We cannot safely stop other users' sessions.
+            console.log(`🛑 SERVER BUG IDENTIFIED: Sessions don't clean up on WebSocket disconnect`);
+            console.log(`🛑 SAFE WORKAROUND: Force close only THIS client's WebSocket connections`);
+            console.log(`⚠️ NOTE: Server-side fix needed to properly clean up sessions on disconnect`);
+            if (this.logger && this.logger.log) {
+                this.logger.log(`🛑 SERVER BUG IDENTIFIED: Sessions don't clean up on WebSocket disconnect`);
+                this.logger.log(`🛑 SAFE WORKAROUND: Force close only THIS client's WebSocket connections`);
+                this.logger.log(`⚠️ NOTE: Server-side fix needed to properly clean up sessions on disconnect`);
+            }
+            
             for (const [userId, websocket] of this.websocketConnections) {
+                console.log(`🔍 Processing WebSocket for ${userId}, readyState: ${websocket.readyState}`);
+                if (this.logger && this.logger.log) this.logger.log(`🔍 Processing WebSocket for ${userId}, readyState: ${websocket.readyState}`);
+                
                 if (websocket.readyState === WebSocket.OPEN) {
                     try {
-                        // Send explicit stop signal to server process
-                        websocket.send(JSON.stringify({
-                            type: 'stop_test',
-                            user_id: userId,
-                            timestamp: performance.now()
-                        }));
-                        this.logger.log(`🛑 Sent stop signal to ${userId} process`);
+                        console.log(`🛑 MULTI-USER SAFE: Force closing only THIS client's WebSocket for ${userId}`);
+                        if (this.logger && this.logger.log) this.logger.log(`🛑 MULTI-USER SAFE: Force closing only THIS client's WebSocket for ${userId}`);
+                        
+                        // Force close the WebSocket - this is safe as it only affects this client
+                        websocket.close(1000, 'Test completed - force disconnect');
+                        
+                        console.log(`✅ Safely force closed WebSocket for ${userId}`);
+                        if (this.logger && this.logger.log) this.logger.log(`✅ Safely force closed WebSocket for ${userId}`);
+                        
+                        // Create a promise that resolves when the WebSocket closes
+                        const closePromise = new Promise((resolve) => {
+                            const originalOnClose = websocket.onclose;
+                            websocket.onclose = (event) => {
+                                console.log(`🔌 WebSocket closed for ${userId} (code: ${event.code}, reason: ${event.reason})`);
+                                if (this.logger && this.logger.log) this.logger.log(`🔌 WebSocket closed for ${userId} (code: ${event.code}, reason: ${event.reason})`);
+                                if (originalOnClose) originalOnClose(event);
+                                resolve();
+                            };
+                            
+                            // Force close after a timeout if server doesn't close gracefully
+                            setTimeout(() => {
+                                if (websocket.readyState === WebSocket.OPEN) {
+                                    console.log(`⏰ Force closing WebSocket for ${userId} after 2s timeout`);
+                                    if (this.logger && this.logger.log) this.logger.log(`⏰ Force closing WebSocket for ${userId} after 2s timeout`);
+                                    websocket.close(1000, 'Test completed - timeout');
+                                } else {
+                                    console.log(`✅ WebSocket for ${userId} already closed naturally`);
+                                    if (this.logger && this.logger.log) this.logger.log(`✅ WebSocket for ${userId} already closed naturally`);
+                                }
+                                resolve();
+                            }, 2000); // 2 second timeout
+                        });
+                        
+                        stopPromises.push(closePromise);
                     } catch (error) {
-                        this.logger.error(`❌ Failed to send stop signal to ${userId}:`, error);
+                        console.error(`❌ Failed to send stop signal to ${userId}:`, error);
+                        if (this.logger && this.logger.error) {
+                            this.logger.error(`❌ Failed to send stop signal to ${userId}:`, error);
+                            this.logger.error(`❌ Error details:`, error.message, error.stack);
+                        }
                     }
+                } else {
+                    console.log(`⚠️ WebSocket for ${userId} not open (state: ${websocket.readyState})`);
+                    if (this.logger && this.logger.log) this.logger.log(`⚠️ WebSocket for ${userId} not open (state: ${websocket.readyState})`);
                 }
             }
             
-            // Wait a moment for stop signals to be processed
-            await new Promise(resolve => setTimeout(resolve, 500));
+            // Wait for all WebSockets to close gracefully or timeout
+            console.log(`⏳ Waiting for ${stopPromises.length} WebSocket connections to close...`);
+            if (this.logger && this.logger.log) this.logger.log(`⏳ Waiting for ${stopPromises.length} WebSocket connections to close...`);
+            if (stopPromises.length > 0) {
+                await Promise.all(stopPromises);
+                console.log(`✅ All ${stopPromises.length} WebSocket close promises resolved`);
+                if (this.logger && this.logger.log) this.logger.log(`✅ All ${stopPromises.length} WebSocket close promises resolved`);
+            } else {
+                console.warn('⚠️ No WebSocket close promises to wait for');
+                if (this.logger && this.logger.warn) this.logger.warn('⚠️ No WebSocket close promises to wait for');
+            }
             
-            // Close all dedicated WebSocket connections
+            // Force close any remaining connections
+            let remainingConnections = 0;
             for (const [userId, websocket] of this.websocketConnections) {
                 if (websocket.readyState === WebSocket.OPEN) {
-                    websocket.close();
+                    remainingConnections++;
+                    console.log(`🔨 Force closing remaining WebSocket for ${userId}`);
+                    if (this.logger && this.logger.log) this.logger.log(`🔨 Force closing remaining WebSocket for ${userId}`);
+                    websocket.close(1000, 'Test completed - force close');
                 }
             }
+            
+            if (remainingConnections > 0) {
+                console.log(`🔨 Force closed ${remainingConnections} remaining connections`);
+                if (this.logger && this.logger.log) this.logger.log(`🔨 Force closed ${remainingConnections} remaining connections`);
+            } else {
+                console.log(`✅ No remaining connections needed force closing`);
+                if (this.logger && this.logger.log) this.logger.log(`✅ No remaining connections needed force closing`);
+            }
+            
             this.websocketConnections.clear();
+            console.log('🧹 WebSocket connections map cleared');
+// ARCHITECTURE FIX: Send stop signals directly to the separate processes (ports 8001-8004)
+            // The main server (port 8000) doesn't have the actual WebSocket sessions
+            // Store session info before clearing connections
+            const sessionInfo = Array.from(this.websocketConnections.entries()).map(([userId, websocket]) => ({
+                userId,
+                userType: userId.split('_')[0].toLowerCase(),
+                readyState: websocket.readyState
+            }));
+            
+            try {
+                console.log(`🛑 ARCHITECTURE FIX: Sending stop signals directly to separate processes`);
+                if (this.logger && this.logger.log) this.logger.log(`🛑 ARCHITECTURE FIX: Sending stop signals directly to separate processes`);
+                
+                // Send stop signals to each user's dedicated process
+                const stopPromises = [];
+                const userPorts = {
+                    'alex': 8001,
+                    'sarah': 8002, 
+                    'jake': 8003,
+                    'computer': 8004
+                };
+                
+                for (const session of sessionInfo) {
+                    const port = userPorts[session.userType];
+                    
+                    if (port) {
+                        const stopPromise = this.sendStopSignalToProcess(session.userType, port, session.userId);
+                        stopPromises.push(stopPromise);
+                    }
+                }
+                
+                // Wait for all stop signals to complete
+                const results = await Promise.allSettled(stopPromises);
+                const successful = results.filter(r => r.status === 'fulfilled').length;
+                const failed = results.filter(r => r.status === 'rejected').length;
+                
+                console.log(`✅ Stop signals sent to separate processes: ${successful} successful, ${failed} failed`);
+                if (this.logger && this.logger.log) this.logger.log(`✅ Stop signals sent to separate processes: ${successful} successful, ${failed} failed`);
+                
+            } catch (error) {
+                console.warn('⚠️ Stop signals to separate processes failed (non-critical):', error.message);
+                if (this.logger && this.logger.log) this.logger.log('⚠️ Stop signals to separate processes failed (non-critical): ' + error.message);
+            }
+            
+            this.websocketConnections.clear();
+            console.log('🧹 WebSocket connections map cleared');
+            if (this.logger && this.logger.log) this.logger.log('🧹 WebSocket connections map cleared');
             
             // Stop latency tracking
-            this.latencyTracker.stop();
+            if (this.latencyTracker) {
+                this.latencyTracker.stop();
+                console.log('🛑 Latency tracker stopped');
+                if (this.logger && this.logger.log) this.logger.log('🛑 Latency tracker stopped');
+            }
             
             // Calculate final results
+            console.log('📊 Calculating final results...');
+            if (this.logger && this.logger.log) this.logger.log('📊 Calculating final results...');
             this.calculateResults();
             
             // Dispatch test completion event for UI
             console.log('📡 Dispatching household-test-complete event');
+            if (this.logger && this.logger.log) this.logger.log('📡 Dispatching household-test-complete event');
             window.dispatchEvent(new CustomEvent('household-test-complete', {
                 detail: this.testResults
             }));
@@ -1428,16 +1624,82 @@ class VirtualHousehold {
                 this.ui.setTestRunning(false);
                 this.ui.showResults(this.testResults);
                 this.ui.updateStatus('Test complete! Check your results below.');
+                console.log('🎨 UI updated with completion status');
+                if (this.logger && this.logger.log) this.logger.log('🎨 UI updated with completion status');
             }
             
-            this.logger.log('🧹 Process-isolated WebSocket connections closed');
-            
+            console.log('🧹 All WebSocket connections properly closed');
+            console.log('✅ completeTest() method finished successfully');
+            if (this.logger && this.logger.log) {
+                this.logger.log('🧹 All WebSocket connections properly closed');
+                this.logger.log('✅ completeTest() method finished successfully');
+            }
             console.log('✅ Virtual Household Simple Multi-Process Test completed');
             
         } catch (error) {
-            console.error('❌ Error completing test:', error);
+            console.error('❌ CRITICAL ERROR in completeTest():', error);
+            console.error('❌ Error message:', error.message);
+            console.error('❌ Error stack:', error.stack);
+            if (this.logger && this.logger.error) {
+                this.logger.error('❌ CRITICAL ERROR in completeTest():', error);
+                this.logger.error('❌ Error message:', error.message);
+                this.logger.error('❌ Error stack:', error.stack);
+            }
         } finally {
             this.isActive = false;
+            this.isCompleting = false; // Reset completion guard
+            console.log('🏁 completeTest() finally block - isActive set to false');
+            if (this.logger && this.logger.log) this.logger.log('🏁 completeTest() finally block - isActive and isCompleting set to false');
+        }
+    }
+    
+    async sendStopSignalToProcess(userType, port, sessionId) {
+        /**
+         * Send stop signal directly to the dedicated process for this user type
+         * This bypasses the main server and goes directly to the process handling the WebSocket
+         */
+        try {
+            console.log(`🛑 Sending stop signal to ${userType} process on port ${port} for session ${sessionId}`);
+            if (this.logger && this.logger.log) this.logger.log(`🛑 Sending stop signal to ${userType} process on port ${port} for session ${sessionId}`);
+            
+            // Construct URL for the dedicated process
+            const protocol = window.location.protocol.replace(':', '');
+            const hostname = window.location.hostname;
+            const processUrl = `${protocol}://${hostname}:${port}/stop-session`;
+            
+            console.log(`🔍 Process stop URL: ${processUrl}`);
+            if (this.logger && this.logger.log) this.logger.log(`🔍 Process stop URL: ${processUrl}`);
+            
+            // Send stop request with session-specific information
+            const response = await fetch(processUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    session_id: sessionId,
+                    user_type: userType,
+                    action: 'stop_session',
+                    reason: 'test_completed'
+                })
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                console.log(`✅ Successfully sent stop signal to ${userType} process:`, result);
+                if (this.logger && this.logger.log) this.logger.log(`✅ Successfully sent stop signal to ${userType} process:`, result);
+                return { success: true, userType, port, result };
+            } else {
+                const errorText = await response.text();
+                console.warn(`⚠️ Stop signal to ${userType} process failed: ${response.status} ${response.statusText} - ${errorText}`);
+                if (this.logger && this.logger.warn) this.logger.warn(`⚠️ Stop signal to ${userType} process failed: ${response.status} ${response.statusText} - ${errorText}`);
+                return { success: false, userType, port, error: `${response.status} ${response.statusText}` };
+            }
+            
+        } catch (error) {
+            console.error(`❌ Error sending stop signal to ${userType} process on port ${port}:`, error);
+            if (this.logger && this.logger.error) this.logger.error(`❌ Error sending stop signal to ${userType} process on port ${port}:`, error);
+            return { success: false, userType, port, error: error.message };
         }
     }
     
@@ -2186,53 +2448,165 @@ class VirtualHousehold {
     }
     
     async stopTest() {
-        if (!this.isActive) return;
+        if (!this.isActive) {
+            this.logger.log('⚠️ stopTest() called but test is not active');
+            return;
+        }
         
+        this.logger.log('🛑 STARTING stopTest() method');
         console.log('🛑 Stopping Virtual Household Test');
         
-        // Stop throughput calculation timer
-        this.stopThroughputCalculationTimer();
-        
-        // Send stop signal to all server processes before closing connections
-        for (const [userId, websocket] of this.websocketConnections) {
-            if (websocket.readyState === WebSocket.OPEN) {
-                try {
-                    // Send explicit stop signal to server process
-                    websocket.send(JSON.stringify({
-                        type: 'stop_test',
-                        user_id: userId,
-                        timestamp: performance.now()
-                    }));
-                    this.logger.log(`🛑 Sent stop signal to ${userId} process`);
-                } catch (error) {
-                    this.logger.error(`❌ Failed to send stop signal to ${userId}:`, error);
+        try {
+            // Stop throughput calculation timer
+            this.logger.log('🛑 Stopping throughput calculation timer...');
+            this.stopThroughputCalculationTimer();
+            
+            // CRITICAL: Send stop signals to all server processes FIRST
+            this.logger.log(`🔍 Found ${this.websocketConnections.size} WebSocket connections to close`);
+            
+            if (this.websocketConnections.size === 0) {
+                this.logger.warn('⚠️ No WebSocket connections found in stopTest()');
+            }
+            
+            const stopPromises = [];
+            
+            // MULTI-USER SAFE APPROACH: Only close the WebSocket connections for THIS test instance
+            this.logger.log(`🛑 SERVER BUG IDENTIFIED: Sessions don't clean up on WebSocket disconnect`);
+            this.logger.log(`🛑 SAFE WORKAROUND: Force close only THIS client's WebSocket connections`);
+            this.logger.log(`⚠️ NOTE: Server-side fix needed to properly clean up sessions on disconnect`);
+            
+            for (const [userId, websocket] of this.websocketConnections) {
+                this.logger.log(`🔍 Processing WebSocket for ${userId}, readyState: ${websocket.readyState}`);
+                
+                if (websocket.readyState === WebSocket.OPEN) {
+                    try {
+                        this.logger.log(`🛑 MULTI-USER SAFE: Force closing only THIS client's WebSocket for ${userId}`);
+                        
+                        // Force close the WebSocket - this is safe as it only affects this client
+                        websocket.close(1000, 'Test stopped - force disconnect');
+                        
+                        this.logger.log(`✅ Safely force closed WebSocket for ${userId}`);
+                        
+                        // Create a promise that resolves when the WebSocket closes
+                        const closePromise = new Promise((resolve) => {
+                            const originalOnClose = websocket.onclose;
+                            websocket.onclose = (event) => {
+                                this.logger.log(`🔌 WebSocket closed for ${userId} (code: ${event.code}, reason: ${event.reason})`);
+                                if (originalOnClose) originalOnClose(event);
+                                resolve();
+                            };
+                            
+                            // Force close after a timeout if server doesn't close gracefully
+                            setTimeout(() => {
+                                if (websocket.readyState === WebSocket.OPEN) {
+                                    this.logger.log(`⏰ Force closing WebSocket for ${userId} after 2s timeout`);
+                                    websocket.close(1000, 'Test stopped - timeout');
+                                } else {
+                                    this.logger.log(`✅ WebSocket for ${userId} already closed naturally`);
+                                }
+                                resolve();
+                            }, 2000); // 2 second timeout
+                        });
+                        
+                        stopPromises.push(closePromise);
+                    } catch (error) {
+                        this.logger.error(`❌ Failed to send stop signal to ${userId}:`, error);
+                        this.logger.error(`❌ Error details:`, error.message, error.stack);
+                    }
+                } else {
+                    this.logger.log(`⚠️ WebSocket for ${userId} not open (state: ${websocket.readyState})`);
                 }
             }
-        }
-        
-        // Wait a moment for stop signals to be processed
-        await new Promise(resolve => setTimeout(resolve, 500));
-        
-        // Close all dedicated WebSocket connections
-        for (const [userId, websocket] of this.websocketConnections) {
-            if (websocket.readyState === WebSocket.OPEN) {
-                websocket.close();
+            
+            // Wait for all WebSockets to close gracefully or timeout
+            this.logger.log(`⏳ Waiting for ${stopPromises.length} WebSocket connections to close...`);
+            if (stopPromises.length > 0) {
+                await Promise.all(stopPromises);
+                this.logger.log(`✅ All ${stopPromises.length} WebSocket close promises resolved`);
+            } else {
+                this.logger.warn('⚠️ No WebSocket close promises to wait for in stopTest()');
             }
+            
+            // Force close any remaining connections
+            let remainingConnections = 0;
+            for (const [userId, websocket] of this.websocketConnections) {
+                if (websocket.readyState === WebSocket.OPEN) {
+                    remainingConnections++;
+                    this.logger.log(`🔨 Force closing remaining WebSocket for ${userId}`);
+                    websocket.close(1000, 'Test stopped - force close');
+                }
+            }
+            
+            if (remainingConnections > 0) {
+                this.logger.log(`🔨 Force closed ${remainingConnections} remaining connections`);
+            } else {
+                this.logger.log(`✅ No remaining connections needed force closing`);
+            }
+            
+            // ARCHITECTURE FIX: Send stop signals directly to the separate processes (ports 8001-8004)
+            // The main server (port 8000) doesn't have the actual WebSocket sessions
+            // Do this BEFORE clearing the websocketConnections map
+            try {
+                this.logger.log(`🛑 ARCHITECTURE FIX: Sending stop signals directly to separate processes`);
+                
+                // Send stop signals to each user's dedicated process
+                const stopPromises = [];
+                const userPorts = {
+                    'alex': 8001,
+                    'sarah': 8002, 
+                    'jake': 8003,
+                    'computer': 8004
+                };
+                
+                for (const [userId, websocket] of this.websocketConnections) {
+                    const userType = userId.split('_')[0].toLowerCase(); // Extract user type from session ID
+                    const port = userPorts[userType];
+                    
+                    if (port) {
+                        const stopPromise = this.sendStopSignalToProcess(userType, port, userId);
+                        stopPromises.push(stopPromise);
+                    }
+                }
+                
+                // Wait for all stop signals to complete
+                const results = await Promise.allSettled(stopPromises);
+                const successful = results.filter(r => r.status === 'fulfilled').length;
+                const failed = results.filter(r => r.status === 'rejected').length;
+                
+                this.logger.log(`✅ Stop signals sent to separate processes: ${successful} successful, ${failed} failed`);
+                
+            } catch (error) {
+                this.logger.warn('⚠️ Stop signals to separate processes failed (non-critical): ' + error.message);
+            }
+            
+            this.websocketConnections.clear();
+            this.logger.log('🧹 WebSocket connections map cleared');
+            
+            // Stop tracking
+            if (this.latencyTracker) {
+                this.latencyTracker.stop();
+                this.logger.log('🛑 Latency tracker stopped');
+            }
+            
+            // Update UI
+            if (this.ui) {
+                this.ui.setTestRunning(false);
+                this.ui.updateStatus('Test stopped - WebSocket connections closed');
+                this.logger.log('🎨 UI updated with stop status');
+            }
+            
+            this.logger.log('🧹 All WebSocket connections properly closed');
+            this.logger.log('✅ stopTest() method finished successfully');
+            
+        } catch (error) {
+            this.logger.error('❌ CRITICAL ERROR in stopTest():', error);
+            this.logger.error('❌ Error message:', error.message);
+            this.logger.error('❌ Error stack:', error.stack);
+            console.error('❌ Error stopping test:', error);
+        } finally {
+            this.isActive = false;
+            this.logger.log('🛑 stopTest() finally block - isActive set to false');
         }
-        this.websocketConnections.clear();
-        
-        // Stop tracking
-        if (this.latencyTracker) {
-            this.latencyTracker.stop();
-        }
-        
-        // Update UI
-        if (this.ui) {
-            this.ui.setTestRunning(false);
-            this.ui.updateStatus('Integrated adaptive test completed successfully');
-        }
-        
-        this.isActive = false;
     }
     
     // Public API for mode switching

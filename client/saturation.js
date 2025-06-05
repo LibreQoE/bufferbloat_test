@@ -5,6 +5,25 @@
 
 import { initWithCryptoSeed, fillRandomBytes } from './xoshiro.js';
 
+/**
+ * Create standardized headers for upload requests to ensure TCP connection reuse
+ * @param {Object} additionalHeaders - Optional additional headers to include
+ * @returns {Object} Standardized headers object
+ */
+function createUploadHeaders(additionalHeaders = {}) {
+    const baseHeaders = {
+        'Content-Type': 'application/octet-stream',
+        'Connection': 'keep-alive',
+        'Keep-Alive': 'timeout=30, max=100',
+        'Cache-Control': 'no-store',
+        'Pragma': 'no-cache',
+        'Accept-Encoding': 'identity'  // Request no compression for optimal connection reuse
+    };
+    
+    // Merge additional headers while preserving base headers for connection reuse
+    return { ...baseHeaders, ...additionalHeaders };
+}
+
 // Configuration
 const THROUGHPUT_INTERVAL = 500; // ms - increased from 200ms for more stable measurements
 const CONCURRENT_STREAMS = 8; // Moderate number of concurrent streams
@@ -1007,11 +1026,7 @@ async function runUploadStream(streamIndex, dataChunks, maxPendingUploads = MAX_
             const response = await fetch('/upload', {
                 method: 'POST',
                 signal: controller.signal,
-                headers: {
-                    'Content-Type': 'application/octet-stream',
-                    'Cache-Control': 'no-store',
-                    'Pragma': 'no-cache'
-                },
+                headers: createUploadHeaders(),
                 body: combinedBlob
             });
             

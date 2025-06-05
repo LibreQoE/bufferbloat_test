@@ -73,9 +73,7 @@ function renderResultsContent(container, data, config) {
         <div class="results-content">
             ${renderTotalGradeCard(data.totalGrade)}
             ${renderPhaseGrades(data.phases)}
-            ${config.showStatistics ? renderStatisticsTables(data.statistics) : ''}
-            ${config.showExplanation ? renderExplanationToggle(data.metadata.explanationContent) : ''}
-            ${config.showShareButton && isSharingSupported() ? renderShareButton() : ''}
+            ${config.showStatistics ? renderStatisticsTables(data.statistics, config.showExplanation ? data.metadata.explanationContent : null, data.userResults) : ''}
         </div>
     `;
     
@@ -127,10 +125,21 @@ function renderPhaseGrades(phases) {
 /**
  * Render statistics tables
  * @param {Object} statistics - Statistics data
+ * @param {string} explanationContent - HTML content for explanation (optional)
+ * @param {Array} userResults - Individual user results (optional)
  * @returns {string} HTML content
  */
-function renderStatisticsTables(statistics) {
+function renderStatisticsTables(statistics, explanationContent = null, userResults = null) {
     let html = '<div class="statistics-section">';
+    
+    // Check if this is Virtual Household test (has userStats) or Single User test
+    const isVirtualHousehold = statistics.userStats && statistics.userStats.length > 0;
+    
+    // For Single User Test: render explanation and share buttons before statistics tables
+    if (!isVirtualHousehold && explanationContent) {
+        html += renderExplanationToggle(explanationContent);
+        html += renderShareButton();
+    }
     
     // Render latency statistics if available
     if (statistics.latency && statistics.latency.length > 0) {
@@ -198,7 +207,7 @@ function renderStatisticsTables(statistics) {
     if (statistics.custom && statistics.custom.length > 0) {
         html += `
             <div class="stats-table-container">
-                <h3>Network Performance Metrics</h3>
+                <h3 class="centered-title">Network Performance Metrics</h3>
                 <table class="stats-table">
                     <tbody>
                         ${statistics.custom.map(stat => `
@@ -214,8 +223,185 @@ function renderStatisticsTables(statistics) {
         `;
     }
     
+    // For Virtual Household Test: render share button after Network Performance Metrics
+    if (isVirtualHousehold) {
+        html += renderShareButton();
+    }
+    
+    // For Virtual Household Test: render explanation toggle after share button
+    if (isVirtualHousehold && explanationContent) {
+        html += renderExplanationToggle(explanationContent);
+    }
+    
+    // Render individual user grade cards if available (Virtual Household only)
+    if (isVirtualHousehold && userResults && userResults.length > 0) {
+        html += renderUserGradeCards(userResults);
+    }
+    
+    // Render per-user statistics if available (Virtual Household only)
+    if (isVirtualHousehold) {
+        html += renderUserStatisticsTables(statistics.userStats);
+    }
+    
     html += '</div>';
     return html;
+}
+
+/**
+ * Render per-user statistics tables
+ * @param {Array} userStats - Array of user statistics data
+ * @returns {string} HTML content
+ */
+function renderUserStatisticsTables(userStats) {
+    let html = '<div class="user-statistics-section">';
+    html += '<h3 class="section-title">Individual User Statistics</h3>';
+    
+    userStats.forEach(user => {
+        html += `
+            <div class="user-stats-container">
+                <h4 class="user-stats-title">
+                    <span class="user-icon">${user.icon}</span>
+                    ${user.name} - Performance Statistics
+                </h4>
+                <div class="user-stats-tables">
+                    ${renderUserLatencyTable(user)}
+                    ${renderUserThroughputTable(user)}
+                </div>
+            </div>
+        `;
+    });
+    
+    html += '</div>';
+    return html;
+}
+
+/**
+ * Render latency statistics table for a user
+ * @param {Object} user - User statistics data
+ * @returns {string} HTML content
+ */
+function renderUserLatencyTable(user) {
+    const latency = user.latency;
+    
+    return `
+        <div class="stats-table-container">
+            <h5>Latency Statistics (ms)</h5>
+            <table class="stats-table">
+                <thead>
+                    <tr>
+                        <th>Metric</th>
+                        <th>Value</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr><td>Median</td><td>${formatStatValue(latency.median)}</td></tr>
+                    <tr><td>Average</td><td>${formatStatValue(latency.average)}</td></tr>
+                    <tr><td>25th %</td><td>${formatStatValue(latency.p25)}</td></tr>
+                    <tr><td>75th %</td><td>${formatStatValue(latency.p75)}</td></tr>
+                    <tr><td>95th %</td><td>${formatStatValue(latency.p95)}</td></tr>
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+
+/**
+ * Render throughput statistics table for a user
+ * @param {Object} user - User statistics data
+ * @returns {string} HTML content
+ */
+function renderUserThroughputTable(user) {
+    const throughput = user.throughput;
+    
+    return `
+        <div class="stats-table-container">
+            <h5>Throughput Statistics (Mbps)</h5>
+            <table class="stats-table">
+                <thead>
+                    <tr>
+                        <th>Direction</th>
+                        <th>Median</th>
+                        <th>Average</th>
+                        <th>75th %</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Download</td>
+                        <td>${formatStatValue(throughput.download.median)}</td>
+                        <td>${formatStatValue(throughput.download.average)}</td>
+                        <td>${formatStatValue(throughput.download.p75)}</td>
+                    </tr>
+                    <tr>
+                        <td>Upload</td>
+                        <td>${formatStatValue(throughput.upload.median)}</td>
+                        <td>${formatStatValue(throughput.upload.average)}</td>
+                        <td>${formatStatValue(throughput.upload.p75)}</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    `;
+}
+
+/**
+ * Render individual user grade cards
+ * @param {Array} userResults - Array of user result data
+ * @returns {string} HTML content
+ */
+function renderUserGradeCards(userResults) {
+    let html = '<div class="user-grades-section">';
+    html += '<h3 class="section-title">Individual User Performance</h3>';
+    html += '<div class="user-grade-container">';
+    
+    userResults.forEach(user => {
+        const userInfo = getUserDisplayInfo(user.userId);
+        html += `
+            <div class="user-grade-box">
+                <h4 class="user-grade-title">
+                    <span class="user-icon">${userInfo.icon}</span>
+                    ${userInfo.name}
+                </h4>
+                <div class="grade ${user.grade.toLowerCase().replace('+', '-plus')}">${user.grade}</div>
+                <p class="user-grade-description">${user.description}</p>
+            </div>
+        `;
+    });
+    
+    html += '</div>';
+    html += '</div>';
+    return html;
+}
+
+/**
+ * Get user display information for grade cards
+ * @param {string} userId - User ID
+ * @returns {Object} User display info
+ */
+function getUserDisplayInfo(userId) {
+    const userDisplayMap = {
+        alex: {
+            name: 'Alex (Gaming)',
+            icon: '🎮'
+        },
+        sarah: {
+            name: 'Sarah (Video Calls)',
+            icon: '💼'
+        },
+        jake: {
+            name: 'Jake (Streaming)',
+            icon: '📺'
+        },
+        computer: {
+            name: 'Computer (Downloads)',
+            icon: '💻'
+        }
+    };
+    
+    return userDisplayMap[userId] || {
+        name: userId.charAt(0).toUpperCase() + userId.slice(1),
+        icon: '👤'
+    };
 }
 
 /**
@@ -291,31 +477,69 @@ export function initializeInteractiveFeatures(containerId, data, config) {
  * @param {string} containerId - Container ID
  */
 function initializeExplanationToggle(containerId) {
+    console.log(`🔧 Initializing explanation toggle for container: ${containerId}`);
+    
     const container = document.getElementById(containerId);
-    if (!container) return;
+    if (!container) {
+        console.warn(`⚠️ Container not found: ${containerId}`);
+        return;
+    }
     
     const toggleButton = container.querySelector('#toggleExplanation');
     const explanationContent = container.querySelector('#explanationContent');
     
-    if (!toggleButton || !explanationContent) return;
+    console.log(`🔧 Toggle elements found:`, {
+        toggleButton: !!toggleButton,
+        explanationContent: !!explanationContent,
+        containerId
+    });
     
-    // Add click event listener to toggle button
-    toggleButton.addEventListener('click', function() {
-        const isHidden = explanationContent.classList.contains('hidden');
-        const toggleIcon = toggleButton.querySelector('.toggle-icon');
+    if (!toggleButton || !explanationContent) {
+        console.warn(`⚠️ Toggle elements not found in container ${containerId}:`, {
+            toggleButton: !!toggleButton,
+            explanationContent: !!explanationContent
+        });
+        return;
+    }
+    
+    // Remove any existing event listeners by cloning the button
+    const newToggleButton = toggleButton.cloneNode(true);
+    toggleButton.parentNode.replaceChild(newToggleButton, toggleButton);
+    
+    // Add click event listener to the new toggle button
+    newToggleButton.addEventListener('click', function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        
+        console.log(`🔧 Explanation toggle clicked for container: ${containerId}`);
+        
+        const currentExplanationContent = container.querySelector('#explanationContent');
+        if (!currentExplanationContent) {
+            console.warn(`⚠️ Explanation content not found during toggle for container: ${containerId}`);
+            return;
+        }
+        
+        const isHidden = currentExplanationContent.classList.contains('hidden');
+        const toggleIcon = newToggleButton.querySelector('.toggle-icon');
+        
+        console.log(`🔧 Current state - hidden: ${isHidden}`);
         
         if (isHidden) {
             // Show the explanation content
-            explanationContent.classList.remove('hidden');
-            toggleButton.classList.add('expanded');
+            currentExplanationContent.classList.remove('hidden');
+            newToggleButton.classList.add('expanded');
             if (toggleIcon) toggleIcon.textContent = '▲';
+            console.log(`✅ Showing explanation content for container: ${containerId}`);
         } else {
             // Hide the explanation content
-            explanationContent.classList.add('hidden');
-            toggleButton.classList.remove('expanded');
+            currentExplanationContent.classList.add('hidden');
+            newToggleButton.classList.remove('expanded');
             if (toggleIcon) toggleIcon.textContent = '▼';
+            console.log(`✅ Hiding explanation content for container: ${containerId}`);
         }
     });
+    
+    console.log(`✅ Explanation toggle initialized successfully for container: ${containerId}`);
 }
 
 /**
@@ -516,6 +740,10 @@ export function addResultsCSS() {
             font-weight: 600;
         }
         
+        .stats-table-container h3.centered-title {
+            text-align: center;
+        }
+        
         .stats-table {
             width: 100%;
             border-collapse: collapse;
@@ -635,6 +863,282 @@ export function addResultsCSS() {
             .stats-table th,
             .stats-table td {
                 padding: 8px;
+            }
+        }
+        
+        /* Virtual Household Explanation Styles */
+        .metric-explanation-section {
+            margin-bottom: 25px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .metric-explanation-section h4 {
+            color: #ffffff !important;
+            margin: 0 0 15px 0;
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        .metric-explanation-section p {
+            color: rgba(255, 255, 255, 0.9) !important;
+            margin: 10px 0;
+            line-height: 1.5;
+        }
+        
+        .calculation-details {
+            margin-top: 15px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .calculation-details p {
+            color: rgba(255, 255, 255, 0.8) !important;
+            margin: 8px 0;
+            font-size: 14px;
+        }
+        
+        .calculation-details ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        
+        .calculation-details li {
+            color: rgba(255, 255, 255, 0.8) !important;
+            margin: 5px 0;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        
+        .explanation-intro {
+            margin-bottom: 25px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+            border-left: 4px solid #45b7d1;
+        }
+        
+        .explanation-intro p {
+            color: rgba(255, 255, 255, 0.9) !important;
+            margin: 0;
+            line-height: 1.5;
+        }
+        
+        .grade-explanations {
+            margin: 25px 0;
+        }
+        
+        .grade-explanations h4 {
+            color: #ffffff !important;
+            margin: 0 0 20px 0;
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        .grade-explanation {
+            display: flex;
+            align-items: flex-start;
+            gap: 15px;
+            margin-bottom: 20px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .grade-badge {
+            min-width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: bold;
+            font-size: 18px;
+            color: white;
+            flex-shrink: 0;
+        }
+        
+        .grade-badge.a-plus {
+            background: linear-gradient(135deg, #28a745, #20c997);
+        }
+        
+        .grade-badge.a {
+            background: linear-gradient(135deg, #28a745, #34ce57);
+        }
+        
+        .grade-badge.b {
+            background: linear-gradient(135deg, #17a2b8, #20c997);
+        }
+        
+        .grade-badge.c {
+            background: linear-gradient(135deg, #ffc107, #ffca2c);
+            color: #212529;
+        }
+        
+        .grade-badge.d {
+            background: linear-gradient(135deg, #fd7e14, #ff8c42);
+        }
+        
+        .grade-badge.f {
+            background: linear-gradient(135deg, #dc3545, #e55353);
+        }
+        
+        .grade-description h4 {
+            color: #ffffff !important;
+            margin: 0 0 8px 0;
+            font-size: 16px;
+            font-weight: 600;
+        }
+        
+        .grade-description p {
+            color: rgba(255, 255, 255, 0.8) !important;
+            margin: 0;
+            line-height: 1.4;
+            font-size: 14px;
+        }
+        
+        .explanation-footer {
+            margin-top: 25px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .explanation-footer p {
+            color: rgba(255, 255, 255, 0.9) !important;
+            margin: 0;
+            font-style: italic;
+        }
+        
+        /* User Statistics Tables */
+        .user-statistics-section {
+            margin-top: 30px;
+        }
+        
+        .user-stats-container {
+            margin-bottom: 30px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .user-stats-title {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin: 0 0 20px 0;
+            color: #ffffff !important;
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        .user-icon {
+            font-size: 24px;
+        }
+        
+        .user-stats-tables {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        
+        .user-stats-tables .stats-table-container {
+            margin-bottom: 0;
+        }
+        
+        .user-stats-tables .stats-table-container h5 {
+            margin: 0 0 15px 0;
+            color: #ffffff !important;
+            font-size: 16px;
+            font-weight: 600;
+        }
+        
+        /* User Grade Cards */
+        .user-grades-section {
+            margin-bottom: 30px;
+        }
+        
+        .user-grade-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .user-grade-box {
+            background: rgba(255, 255, 255, 0.05) !important;
+            padding: 20px;
+            border-radius: 8px;
+            text-align: center;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+        }
+        
+        .user-grade-title {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            margin: 0 0 15px 0;
+            color: #ffffff !important;
+            font-size: 16px;
+            font-weight: 600;
+        }
+        
+        .user-grade-box .grade {
+            font-size: 48px;
+            font-weight: bold;
+            margin: 15px 0;
+        }
+        
+        .user-grade-description {
+            margin: 15px 0 0 0;
+            color: rgba(255, 255, 255, 0.8) !important;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        
+        /* Responsive design for user statistics */
+        @media (max-width: 768px) {
+            .user-stats-tables {
+                grid-template-columns: 1fr;
+            }
+            
+            .user-stats-container {
+                padding: 15px;
+            }
+            
+            .user-stats-title {
+                font-size: 16px;
+            }
+            
+            .user-icon {
+                font-size: 20px;
+            }
+            
+            .user-grade-container {
+                grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+                gap: 15px;
+            }
+            
+            .user-grade-box {
+                padding: 15px;
+            }
+            
+            .user-grade-box .grade {
+                font-size: 36px;
+            }
+            
+            .user-grade-title {
+                font-size: 14px;
             }
         }
     `;

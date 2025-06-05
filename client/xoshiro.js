@@ -105,14 +105,20 @@ let dataPool = {
     small: [], // Pool of 64KB chunks
     medium: [], // Pool of 128KB chunks
     large: [], // Pool of 256KB chunks
-    maxPoolSize: 10 // Maximum chunks to keep in each pool
+    xlarge: [], // Pool of 1MB chunks
+    xxlarge: [], // Pool of 4MB chunks
+    ultra: [], // Pool of 8MB chunks
+    maxPoolSize: 5 // Reduced for larger chunks to manage memory
 };
 
 // Chunk size constants
 const CHUNK_SIZES = {
-    SMALL: 64 * 1024,   // 64KB
-    MEDIUM: 128 * 1024, // 128KB
-    LARGE: 256 * 1024   // 256KB
+    SMALL: 64 * 1024,     // 64KB
+    MEDIUM: 128 * 1024,   // 128KB
+    LARGE: 256 * 1024,    // 256KB
+    XLARGE: 1024 * 1024,  // 1MB
+    XXLARGE: 4096 * 1024, // 4MB
+    ULTRA: 8192 * 1024    // 8MB
 };
 
 /**
@@ -236,9 +242,21 @@ export function getPooledTestData(size) {
         pool = dataPool.large;
         poolKey = 'large';
         size = CHUNK_SIZES.LARGE; // Standardize to pool size
+    } else if (size <= CHUNK_SIZES.XLARGE) {
+        pool = dataPool.xlarge;
+        poolKey = 'xlarge';
+        size = CHUNK_SIZES.XLARGE; // Standardize to pool size
+    } else if (size <= CHUNK_SIZES.XXLARGE) {
+        pool = dataPool.xxlarge;
+        poolKey = 'xxlarge';
+        size = CHUNK_SIZES.XXLARGE; // Standardize to pool size
+    } else if (size <= CHUNK_SIZES.ULTRA) {
+        pool = dataPool.ultra;
+        poolKey = 'ultra';
+        size = CHUNK_SIZES.ULTRA; // Standardize to pool size
     } else {
         // Size too large for pooling, generate directly
-        console.log(`Generating large data chunk (${(size/1024/1024).toFixed(1)}MB) - too large for pooling`);
+        console.log(`Generating ultra-large data chunk (${(size/1024/1024).toFixed(1)}MB) - exceeds maximum pool size`);
         return generateTestData(size);
     }
     
@@ -275,18 +293,30 @@ export function initializeDataPools() {
     const poolTypes = [
         { pool: dataPool.small, size: CHUNK_SIZES.SMALL, name: 'small' },
         { pool: dataPool.medium, size: CHUNK_SIZES.MEDIUM, name: 'medium' },
-        { pool: dataPool.large, size: CHUNK_SIZES.LARGE, name: 'large' }
+        { pool: dataPool.large, size: CHUNK_SIZES.LARGE, name: 'large' },
+        { pool: dataPool.xlarge, size: CHUNK_SIZES.XLARGE, name: 'xlarge' },
+        { pool: dataPool.xxlarge, size: CHUNK_SIZES.XXLARGE, name: 'xxlarge' },
+        { pool: dataPool.ultra, size: CHUNK_SIZES.ULTRA, name: 'ultra' }
     ];
     
     poolTypes.forEach(({ pool, size, name }) => {
-        const targetCount = Math.min(3, dataPool.maxPoolSize); // Start with 3 chunks per pool
+        // Use fewer chunks for larger sizes to manage memory usage
+        let targetCount;
+        if (size >= CHUNK_SIZES.ULTRA) {
+            targetCount = 1; // Only 1 ultra chunk (8MB each)
+        } else if (size >= CHUNK_SIZES.XLARGE) {
+            targetCount = 2; // 2 chunks for 1MB+ sizes
+        } else {
+            targetCount = Math.min(3, dataPool.maxPoolSize); // 3 chunks for smaller sizes
+        }
         
         for (let i = 0; i < targetCount; i++) {
             const chunk = generateTestData(size);
             pool.push(chunk);
         }
         
-        console.log(`Pre-generated ${targetCount} ${name} chunks (${(size/1024)}KB each)`);
+        const sizeDisplay = size >= 1024 * 1024 ? `${(size/1024/1024)}MB` : `${(size/1024)}KB`;
+        console.log(`Pre-generated ${targetCount} ${name} chunks (${sizeDisplay} each)`);
     });
     
     console.log('Data pool initialization complete');
@@ -299,11 +329,15 @@ export function initializeDataPools() {
 export function clearDataPools() {
     console.log('Clearing xoshiro data pools...');
     
-    const totalChunks = dataPool.small.length + dataPool.medium.length + dataPool.large.length;
+    const totalChunks = dataPool.small.length + dataPool.medium.length + dataPool.large.length +
+                       dataPool.xlarge.length + dataPool.xxlarge.length + dataPool.ultra.length;
     
     dataPool.small.length = 0;
     dataPool.medium.length = 0;
     dataPool.large.length = 0;
+    dataPool.xlarge.length = 0;
+    dataPool.xxlarge.length = 0;
+    dataPool.ultra.length = 0;
     
     console.log(`Cleared ${totalChunks} chunks from data pools`);
 }
@@ -328,6 +362,21 @@ export function getPoolStats() {
             count: dataPool.large.length,
             size: CHUNK_SIZES.LARGE,
             totalMemory: dataPool.large.length * CHUNK_SIZES.LARGE
+        },
+        xlarge: {
+            count: dataPool.xlarge.length,
+            size: CHUNK_SIZES.XLARGE,
+            totalMemory: dataPool.xlarge.length * CHUNK_SIZES.XLARGE
+        },
+        xxlarge: {
+            count: dataPool.xxlarge.length,
+            size: CHUNK_SIZES.XXLARGE,
+            totalMemory: dataPool.xxlarge.length * CHUNK_SIZES.XXLARGE
+        },
+        ultra: {
+            count: dataPool.ultra.length,
+            size: CHUNK_SIZES.ULTRA,
+            totalMemory: dataPool.ultra.length * CHUNK_SIZES.ULTRA
         },
         maxPoolSize: dataPool.maxPoolSize
     };

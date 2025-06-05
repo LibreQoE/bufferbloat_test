@@ -133,16 +133,77 @@
                             <p>Your bufferbloat grade shows how much extra latency (delay) your connection adds when under heavy load. Lower latency increase = better grade.</p>
                         </div>
                         
+                        <!-- How Scores Are Calculated -->
+                        <div class="calculation-explanation-section">
+                            <h4>How Your Scores Are Calculated</h4>
+                            <p><strong>Latency Measurement:</strong> We measure your baseline latency (idle connection), then measure latency again during heavy network load to calculate the increase.</p>
+                            <div class="calculation-details">
+                                <p><strong>Test Phases:</strong></p>
+                                <ul>
+                                    <li><strong>Download Phase:</strong> Saturates your download bandwidth while measuring latency increase</li>
+                                    <li><strong>Upload Phase:</strong> Saturates your upload bandwidth while measuring latency increase</li>
+                                    <li><strong>Bidirectional Phase:</strong> Saturates both download and upload simultaneously</li>
+                                </ul>
+                                <p><strong>Grade Calculation:</strong> Based on latency increase in milliseconds:</p>
+                                <div class="grade-calculation-table">
+                                    <table class="calculation-table">
+                                        <thead>
+                                            <tr>
+                                                <th>Latency Increase</th>
+                                                <th>Grade</th>
+                                                <th>Description</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>
+                                            <tr class="grade-row a-plus">
+                                                <td>&lt; 5 ms</td>
+                                                <td><span class="grade-badge-small a-plus">A+</span></td>
+                                                <td>Excellent - Virtually no bufferbloat</td>
+                                            </tr>
+                                            <tr class="grade-row a">
+                                                <td>5-30 ms</td>
+                                                <td><span class="grade-badge-small a">A</span></td>
+                                                <td>Very Good - Minimal bufferbloat</td>
+                                            </tr>
+                                            <tr class="grade-row b">
+                                                <td>30-60 ms</td>
+                                                <td><span class="grade-badge-small b">B</span></td>
+                                                <td>Good - Moderate bufferbloat</td>
+                                            </tr>
+                                            <tr class="grade-row c">
+                                                <td>60-200 ms</td>
+                                                <td><span class="grade-badge-small c">C</span></td>
+                                                <td>Fair - Noticeable bufferbloat</td>
+                                            </tr>
+                                            <tr class="grade-row d">
+                                                <td>200-400 ms</td>
+                                                <td><span class="grade-badge-small d">D</span></td>
+                                                <td>Poor - Significant bufferbloat</td>
+                                            </tr>
+                                            <tr class="grade-row f">
+                                                <td>≥ 400 ms</td>
+                                                <td><span class="grade-badge-small f">F</span></td>
+                                                <td>Very Poor - Severe bufferbloat</td>
+                                            </tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                        
                         <!-- Total Grade Explanation -->
                         <div class="total-grade-explanation-section">
-                            <h4>Total Grade</h4>
-                            <p>Your <strong>Total Bufferbloat Grade</strong> combines all three test phases with equal weighting (33.33% each). This gives you an overall assessment of your connection's bufferbloat performance across download, upload, and simultaneous bidirectional usage scenarios.</p>
+                            <h4>Total Grade Calculation</h4>
+                            <p>Your <strong>Total Bufferbloat Grade</strong> combines all three test phases with equal weighting (33.33% each). Each letter grade is converted to a numeric value (A+=6, A=5, B=4, C=3, D=2, F=1), averaged, then converted back to a letter grade.</p>
+                            <p><strong>Example:</strong> If you get A+ (6), B (4), and A (5), your total = (6+4+5)/3 = 5.0 = A grade overall.</p>
                         </div>
                         
                         <!-- Individual Grades Explanation -->
                         <div class="individual-grades-explanation-section">
-                            <h4>Individual Phase Grades</h4>
-                            <p>Each phase tests different aspects of your connection's bufferbloat behavior under specific load conditions.</p>
+                            <h4>What Each Phase Tests</h4>
+                            <p><strong>Download:</strong> How much latency increases when downloading large files (simulates streaming, software updates)</p>
+                            <p><strong>Upload:</strong> How much latency increases when uploading data (simulates video calls, cloud backups)</p>
+                            <p><strong>Bidirectional:</strong> How much latency increases during simultaneous heavy download and upload (simulates real-world mixed usage)</p>
                         </div>
                         
                         <div class="grade-explanations">
@@ -539,6 +600,133 @@
                     </div>
                 </div>
 
+                <!-- What Do My Results Mean? Section for Virtual Household -->
+                <div class="results-explanation">
+                    <button id="toggleHouseholdExplanation" class="explanation-toggle">
+                        <span class="toggle-icon">❓</span>
+                        What Do My Results Mean?
+                        <span class="toggle-arrow">▼</span>
+                    </button>
+                    <div id="householdExplanationContent" class="explanation-content hidden">
+                        <div class="explanation-intro">
+                            <p>Your Virtual Household test simulates multiple users with different internet usage patterns to evaluate your network's performance under realistic load.</p>
+                        </div>
+                        
+                        <!-- Network Fairness Explanation -->
+                        <div class="metric-explanation-section">
+                            <h4>Network Fairness</h4>
+                            <p><strong>What it measures:</strong> How evenly bandwidth is distributed among different users and applications in your household.</p>
+                            <p><strong>How it's calculated:</strong> We measure the actual throughput each virtual user receives compared to their target bandwidth needs, then calculate how fairly the available bandwidth is shared using the Jain's Fairness Index formula.</p>
+                            <div class="calculation-details">
+                                <p><strong>Calculation method:</strong></p>
+                                <ul>
+                                    <li>Each user has target bandwidth requirements (Gaming: 1.5 Mbps, Video calls: 2.5 Mbps, Streaming: 25 Mbps, Downloads: varies)</li>
+                                    <li>We measure actual throughput achieved by each user during the test</li>
+                                    <li>Fairness score = (sum of throughputs)² / (n × sum of throughputs²) where n = number of users</li>
+                                    <li>Score ranges from 0% (completely unfair) to 100% (perfectly fair)</li>
+                                </ul>
+                            </div>
+                        </div>
+                        
+                        <!-- Latency Stability Explanation -->
+                        <div class="metric-explanation-section">
+                            <h4>Latency Stability</h4>
+                            <p><strong>What it measures:</strong> How consistent response times remain when multiple users are active simultaneously.</p>
+                            <p><strong>How it's calculated:</strong> We continuously measure latency for each user throughout the test and calculate the coefficient of variation (standard deviation / mean) to determine stability.</p>
+                            <div class="calculation-details">
+                                <p><strong>Calculation method:</strong></p>
+                                <ul>
+                                    <li>Latency is measured every 100ms for each virtual user during the 30-second household simulation</li>
+                                    <li>We calculate the coefficient of variation: CV = (standard deviation / mean latency) × 100</li>
+                                    <li>Lower CV values indicate more stable latency</li>
+                                    <li>Stability percentage = max(0, 100 - CV) where CV < 10% = excellent stability</li>
+                                </ul>
+                            </div>
+                        </div>
+                        
+                        <!-- Overall Grade Calculation -->
+                        <div class="metric-explanation-section">
+                            <h4>Overall Grade Calculation</h4>
+                            <p><strong>What it measures:</strong> Your overall network performance combining fairness, stability, and individual user experiences.</p>
+                            <p><strong>How it's calculated:</strong> The overall grade is a weighted average of multiple performance metrics, designed to reflect real-world user satisfaction.</p>
+                            <div class="calculation-details">
+                                <p><strong>Weighting Formula:</strong></p>
+                                <ul>
+                                    <li><strong>Network Fairness (40%):</strong> How evenly bandwidth is distributed among users</li>
+                                    <li><strong>Latency Stability (30%):</strong> How consistent response times remain under load</li>
+                                    <li><strong>Individual User Performance (30%):</strong> Average of all four virtual users' individual grades</li>
+                                </ul>
+                                <p><strong>Calculation Steps:</strong></p>
+                                <ul>
+                                    <li>1. Calculate Network Fairness percentage using Jain's Fairness Index</li>
+                                    <li>2. Calculate Latency Stability percentage using coefficient of variation</li>
+                                    <li>3. Calculate individual user grades based on their specific requirements:
+                                        <ul style="margin-top: 8px;">
+                                            <li><strong>Alex (Gaming):</strong> Prioritizes low latency and jitter (&lt;50ms ping, &lt;10ms jitter = A+)</li>
+                                            <li><strong>Sarah (Video Calls):</strong> Needs stable bandwidth and low jitter (2.5+ Mbps, &lt;20ms jitter = A+)</li>
+                                            <li><strong>Jake (Streaming):</strong> Requires consistent high throughput (25+ Mbps sustained = A+)</li>
+                                            <li><strong>Computer (Downloads):</strong> Tolerates higher latency but needs fair bandwidth allocation</li>
+                                        </ul>
+                                    </li>
+                                    <li>4. Combine using weighted formula: Overall = (Fairness × 0.4) + (Stability × 0.3) + (User Average × 0.3)</li>
+                                    <li>5. Convert final percentage to letter grade using standard scale</li>
+                                </ul>
+                            </div>
+                        </div>
+                        
+                        <!-- Grade Scale -->
+                        <div class="grade-explanations">
+                            <h4>Grade Scale</h4>
+                            <div class="grade-explanation a-plus">
+                                <div class="grade-badge">A+</div>
+                                <div class="grade-description">
+                                    <h4>Excellent (95-100%)</h4>
+                                    <p>Outstanding network performance. All users get fair bandwidth allocation and latency remains very stable under load.</p>
+                                </div>
+                            </div>
+                            <div class="grade-explanation a">
+                                <div class="grade-badge">A</div>
+                                <div class="grade-description">
+                                    <h4>Very Good (90-94%)</h4>
+                                    <p>Great network performance with minor variations. Most users get adequate bandwidth with stable latency.</p>
+                                </div>
+                            </div>
+                            <div class="grade-explanation b">
+                                <div class="grade-badge">B</div>
+                                <div class="grade-description">
+                                    <h4>Good (80-89%)</h4>
+                                    <p>Good network performance with some inequality in bandwidth distribution or latency variations under load.</p>
+                                </div>
+                            </div>
+                            <div class="grade-explanation c">
+                                <div class="grade-badge">C</div>
+                                <div class="grade-description">
+                                    <h4>Fair (70-79%)</h4>
+                                    <p>Acceptable performance but some users may experience reduced bandwidth or inconsistent latency during peak usage.</p>
+                                </div>
+                            </div>
+                            <div class="grade-explanation d">
+                                <div class="grade-badge">D</div>
+                                <div class="grade-description">
+                                    <h4>Poor (60-69%)</h4>
+                                    <p>Poor network performance with significant bandwidth inequality or latency instability affecting user experience.</p>
+                                </div>
+                            </div>
+                            <div class="grade-explanation f">
+                                <div class="grade-badge">F</div>
+                                <div class="grade-description">
+                                    <h4>Very Poor (Below 60%)</h4>
+                                    <p>Very poor network performance. Major bandwidth inequality and latency instability make multi-user scenarios problematic.</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="explanation-footer">
+                            <p><strong>What can I do to improve?</strong> Consider upgrading your router firmware to one with better Quality of Service (QoS) management, or contact your ISP about implementing Smart Queue Management (SQM).</p>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Recommendations -->
                 <div class="recommendations">
                     <h3>Recommendations</h3>
@@ -627,6 +815,394 @@
                 document.getElementById('enhancedLoggingControls').style.display = 'none';
             }
         });
+    </script>
+    
+    <!-- Additional CSS for Virtual Household Explanation -->
+    <style>
+        .metric-explanation-section {
+            margin-bottom: 25px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+            border-left: 4px solid #667eea;
+        }
+        
+        .metric-explanation-section h4 {
+            color: #ffffff !important;
+            margin: 0 0 15px 0;
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        .metric-explanation-section p {
+            color: rgba(255, 255, 255, 0.9) !important;
+            margin: 10px 0;
+            line-height: 1.5;
+        }
+        
+        .calculation-details {
+            margin-top: 15px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .calculation-details p {
+            color: rgba(255, 255, 255, 0.8) !important;
+            margin: 8px 0;
+            font-size: 14px;
+        }
+        
+        .calculation-details ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        
+        .calculation-details li {
+            color: rgba(255, 255, 255, 0.8) !important;
+            margin: 5px 0;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        
+        .calculation-explanation-section {
+            margin-bottom: 25px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+            border-left: 4px solid #45b7d1;
+        }
+        
+        .calculation-explanation-section h4 {
+            color: #ffffff !important;
+            margin: 0 0 15px 0;
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        .total-grade-explanation-section,
+        .individual-grades-explanation-section {
+            margin-bottom: 25px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 8px;
+            border-left: 4px solid #28a745;
+        }
+        
+        .total-grade-explanation-section h4,
+        .individual-grades-explanation-section h4 {
+            color: #ffffff !important;
+            margin: 0 0 15px 0;
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        /* Ensure consistent styling for explanation content */
+        .explanation-content h4 {
+            color: #ffffff !important;
+            margin: 20px 0 15px 0;
+            font-size: 18px;
+            font-weight: 600;
+        }
+        
+        .explanation-content p {
+            color: rgba(255, 255, 255, 0.9) !important;
+            line-height: 1.5;
+            margin: 10px 0;
+        }
+        
+        .explanation-content ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        
+        .explanation-content li {
+            color: rgba(255, 255, 255, 0.8) !important;
+            margin: 5px 0;
+            line-height: 1.4;
+        }
+        
+        .explanation-footer {
+            margin-top: 25px;
+            padding: 15px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 6px;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .explanation-footer p {
+            color: rgba(255, 255, 255, 0.9) !important;
+            margin: 0;
+            font-style: italic;
+        }
+        
+        /* Grade Calculation Table Styles */
+        .grade-calculation-table {
+            margin: 15px 0;
+            overflow-x: auto;
+        }
+        
+        .calculation-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .calculation-table th {
+            background: rgba(255, 255, 255, 0.1);
+            color: #ffffff !important;
+            padding: 12px 15px;
+            text-align: left;
+            font-weight: 600;
+            font-size: 14px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        
+        .calculation-table td {
+            padding: 10px 15px;
+            color: rgba(255, 255, 255, 0.9) !important;
+            font-size: 14px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        
+        .calculation-table tr:last-child td {
+            border-bottom: none;
+        }
+        
+        .calculation-table tr:hover {
+            background: rgba(255, 255, 255, 0.03);
+        }
+        
+        /* Grade badge styles for table */
+        .grade-badge-small {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 12px;
+            text-align: center;
+            min-width: 24px;
+        }
+        
+        .grade-badge-small.a-plus {
+            background: linear-gradient(135deg, #28a745, #20c997);
+            color: white;
+        }
+        
+        .grade-badge-small.a {
+            background: linear-gradient(135deg, #28a745, #34ce57);
+            color: white;
+        }
+        
+        .grade-badge-small.b {
+            background: linear-gradient(135deg, #17a2b8, #20c997);
+            color: white;
+        }
+        
+        .grade-badge-small.c {
+            background: linear-gradient(135deg, #ffc107, #ffca2c);
+            color: #212529;
+        }
+        
+        .grade-badge-small.d {
+            background: linear-gradient(135deg, #fd7e14, #ff8c42);
+            color: white;
+        }
+        
+        .grade-badge-small.f {
+            background: linear-gradient(135deg, #dc3545, #e55353);
+            color: white;
+        }
+        
+        /* Grade row highlighting */
+        .grade-row.a-plus {
+            background: rgba(40, 167, 69, 0.1);
+        }
+        
+        .grade-row.a {
+            background: rgba(40, 167, 69, 0.08);
+        }
+        
+        .grade-row.b {
+            background: rgba(23, 162, 184, 0.08);
+        }
+        
+        .grade-row.c {
+            background: rgba(255, 193, 7, 0.08);
+        }
+        
+        .grade-row.d {
+            background: rgba(253, 126, 20, 0.08);
+        }
+        
+        .grade-row.f {
+            background: rgba(220, 53, 69, 0.08);
+        }
+    </style>
+    
+    <!-- Virtual Household Explanation Toggle Script -->
+    <script>
+        // Function to initialize Virtual Household explanation toggle
+        function initializeHouseholdToggle() {
+            console.log('🏠 Initializing Virtual Household explanation toggle...');
+            
+            const toggleButton = document.getElementById('toggleHouseholdExplanation');
+            const explanationContent = document.getElementById('householdExplanationContent');
+            
+            console.log('🏠 Toggle elements found:', {
+                toggleButton: !!toggleButton,
+                explanationContent: !!explanationContent
+            });
+            
+            if (toggleButton && explanationContent) {
+                // Check if already initialized
+                if (toggleButton.hasAttribute('data-household-initialized')) {
+                    console.log('🏠 Toggle already initialized, skipping');
+                    return;
+                }
+                
+                // Mark as initialized
+                toggleButton.setAttribute('data-household-initialized', 'true');
+                
+                // Remove any existing event listeners by cloning
+                const newToggleButton = toggleButton.cloneNode(true);
+                toggleButton.parentNode.replaceChild(newToggleButton, toggleButton);
+                newToggleButton.setAttribute('data-household-initialized', 'true');
+                
+                newToggleButton.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+                    
+                    console.log('🏠 Virtual Household explanation toggle clicked');
+                    
+                    const currentExplanationContent = document.getElementById('householdExplanationContent');
+                    const isHidden = currentExplanationContent.classList.contains('hidden');
+                    const toggleArrow = newToggleButton.querySelector('.toggle-arrow');
+                    
+                    console.log('🏠 Current state - hidden:', isHidden);
+                    
+                    if (isHidden) {
+                        // Show the explanation content
+                        currentExplanationContent.classList.remove('hidden');
+                        newToggleButton.classList.add('expanded');
+                        if (toggleArrow) toggleArrow.textContent = '▲';
+                        console.log('🏠 Showing Virtual Household explanation');
+                    } else {
+                        // Hide the explanation content
+                        currentExplanationContent.classList.add('hidden');
+                        newToggleButton.classList.remove('expanded');
+                        if (toggleArrow) toggleArrow.textContent = '▼';
+                        console.log('🏠 Hiding Virtual Household explanation');
+                    }
+                });
+                
+                console.log('✅ Virtual Household explanation toggle initialized successfully');
+                return true;
+            } else {
+                console.log('❌ Virtual Household explanation elements not found yet');
+                return false;
+            }
+        }
+        
+        // Initialize on DOM ready
+        document.addEventListener('DOMContentLoaded', function() {
+            initializeHouseholdToggle();
+        });
+        
+        // Listen for household test completion events
+        document.addEventListener('household-test-complete', function() {
+            console.log('🏠 Household test complete event received, initializing toggle...');
+            setTimeout(initializeHouseholdToggle, 100);
+        });
+        
+        // Listen for any results display events
+        document.addEventListener('results-displayed', function(event) {
+            if (event.detail && event.detail.testType === 'virtual-household') {
+                console.log('🏠 Virtual household results displayed, initializing toggle...');
+                setTimeout(initializeHouseholdToggle, 100);
+            }
+        });
+        
+        // Mutation observer to watch for household results being added to DOM
+        const observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                if (mutation.type === 'childList') {
+                    mutation.addedNodes.forEach(function(node) {
+                        if (node.nodeType === Node.ELEMENT_NODE) {
+                            // Check if household results container was added
+                            if (node.id === 'householdResults' ||
+                                node.querySelector && node.querySelector('#householdResults')) {
+                                console.log('🏠 Household results container detected in DOM, initializing toggle...');
+                                setTimeout(initializeHouseholdToggle, 100);
+                            }
+                            // Check if the toggle button was added
+                            if (node.id === 'toggleHouseholdExplanation' ||
+                                node.querySelector && node.querySelector('#toggleHouseholdExplanation')) {
+                                console.log('🏠 Household toggle button detected in DOM, initializing...');
+                                setTimeout(initializeHouseholdToggle, 100);
+                            }
+                        }
+                    });
+                }
+            });
+        });
+        
+        // Start observing
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true
+        });
+        
+        // Periodic check as fallback
+        let checkInterval = setInterval(function() {
+            const householdResults = document.getElementById('householdResults');
+            const toggleButton = document.getElementById('toggleHouseholdExplanation');
+            
+            if (householdResults && !householdResults.classList.contains('hidden') &&
+                toggleButton && !toggleButton.hasAttribute('data-household-initialized')) {
+                console.log('🏠 Periodic check found household results, initializing toggle...');
+                if (initializeHouseholdToggle()) {
+                    clearInterval(checkInterval);
+                }
+            }
+        }, 1000);
+        
+        // Clear interval after 30 seconds to avoid infinite checking
+        setTimeout(function() {
+            clearInterval(checkInterval);
+        }, 30000);
+        
+        // Global function for manual testing
+        window.toggleHouseholdExplanation = function() {
+            const explanationContent = document.getElementById('householdExplanationContent');
+            const toggleButton = document.getElementById('toggleHouseholdExplanation');
+            
+            if (explanationContent && toggleButton) {
+                const isHidden = explanationContent.classList.contains('hidden');
+                const toggleArrow = toggleButton.querySelector('.toggle-arrow');
+                
+                if (isHidden) {
+                    explanationContent.classList.remove('hidden');
+                    toggleButton.classList.add('expanded');
+                    if (toggleArrow) toggleArrow.textContent = '▲';
+                } else {
+                    explanationContent.classList.add('hidden');
+                    toggleButton.classList.remove('expanded');
+                    if (toggleArrow) toggleArrow.textContent = '▼';
+                }
+                
+                console.log('🏠 Manual toggle executed, now hidden:', explanationContent.classList.contains('hidden'));
+            } else {
+                console.error('❌ Elements not found for manual toggle');
+            }
+        };
+        
+        // Global function to force initialization
+        window.initializeHouseholdToggle = initializeHouseholdToggle;
     </script>
     
     <!-- Load warmup and adaptive controllers -->

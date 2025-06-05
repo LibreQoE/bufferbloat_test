@@ -80,8 +80,8 @@ class EnhancedLogger {
         
         this.logs.push(logEntry);
         
-        // Trim logs if too many (reduced from 10k to 1k)
-        if (this.logs.length > 1000) {
+        // Trim logs if too many - use the configured maxLogs value
+        if (this.logs.length > this.maxLogs) {
             this.logs.shift();
         }
         
