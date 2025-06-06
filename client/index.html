@@ -620,7 +620,7 @@
                             <div class="calculation-details">
                                 <p><strong>Calculation method:</strong></p>
                                 <ul>
-                                    <li>Each user has target bandwidth requirements (Gaming: 1.5 Mbps, Video calls: 2.5 Mbps, Streaming: 25 Mbps, Downloads: varies)</li>
+                                    <li>Each user has target bandwidth requirements (Gaming: 1.5 Mbps, Video calls: 2.5 Mbps, Streaming: 25 Mbps, Downloads: varies based on detected speed)</li>
                                     <li>We measure actual throughput achieved by each user during the test</li>
                                     <li>Fairness score = (sum of throughputs)² / (n × sum of throughputs²) where n = number of users</li>
                                     <li>Score ranges from 0% (completely unfair) to 100% (perfectly fair)</li>
@@ -631,15 +631,23 @@
                         <!-- Latency Stability Explanation -->
                         <div class="metric-explanation-section">
                             <h4>Latency Stability</h4>
-                            <p><strong>What it measures:</strong> How consistent response times remain when multiple users are active simultaneously.</p>
-                            <p><strong>How it's calculated:</strong> We continuously measure latency for each user throughout the test and calculate the coefficient of variation (standard deviation / mean) to determine stability.</p>
+                            <p><strong>What it measures:</strong> How consistent response times remain when multiple users are active simultaneously, with emphasis on latency-sensitive applications.</p>
+                            <p><strong>How it's calculated:</strong> We continuously measure latency for each user throughout the test and calculate a weighted stability score that prioritizes gaming and video conferencing users.</p>
                             <div class="calculation-details">
-                                <p><strong>Calculation method:</strong></p>
+                                <p><strong>Updated Calculation Method (Enhanced for Realistic Thresholds):</strong></p>
                                 <ul>
                                     <li>Latency is measured every 100ms for each virtual user during the 30-second household simulation</li>
-                                    <li>We calculate the coefficient of variation: CV = (standard deviation / mean latency) × 100</li>
-                                    <li>Lower CV values indicate more stable latency</li>
-                                    <li>Stability percentage = max(0, 100 - CV) where CV < 10% = excellent stability</li>
+                                    <li><strong>User-Specific Thresholds (Updated):</strong>
+                                        <ul style="margin-top: 8px;">
+                                            <li><strong>Alex (Gaming):</strong> 75ms latency, 30ms jitter threshold</li>
+                                            <li><strong>Sarah (Video Calls):</strong> 150ms latency, 30ms jitter threshold (increased from 100ms for realistic expectations)</li>
+                                            <li><strong>Jake (Streaming):</strong> 300ms latency, 100ms jitter threshold (increased from 200ms/20ms for better tolerance)</li>
+                                            <li><strong>Computer (Downloads):</strong> 5000ms latency, 100ms jitter, 5.0% loss threshold (increased from 200ms/50ms/2.0% for background tasks)</li>
+                                        </ul>
+                                    </li>
+                                    <li><strong>Weighted Scoring (Updated):</strong> Alex: 48%, Sarah: 48%, Jake: 4%, Computer: 0% (prioritizes latency-sensitive users)</li>
+                                    <li>Individual user scores use forgiving penalty system: no penalty within 1.5x threshold, generous grading scale</li>
+                                    <li>Final stability score combines weighted individual performances</li>
                                 </ul>
                             </div>
                         </div>
@@ -647,30 +655,32 @@
                         <!-- Overall Grade Calculation -->
                         <div class="metric-explanation-section">
                             <h4>Overall Grade Calculation</h4>
-                            <p><strong>What it measures:</strong> Your overall network performance combining fairness, stability, and individual user experiences.</p>
-                            <p><strong>How it's calculated:</strong> The overall grade is a weighted average of multiple performance metrics, designed to reflect real-world user satisfaction.</p>
+                            <p><strong>What it measures:</strong> Your overall network performance combining fairness, stability, and individual user experiences with realistic expectations.</p>
+                            <p><strong>How it's calculated:</strong> The overall grade uses updated thresholds and more forgiving scoring to reflect real-world performance expectations.</p>
                             <div class="calculation-details">
-                                <p><strong>Weighting Formula:</strong></p>
+                                <p><strong>Updated Weighting Formula:</strong></p>
                                 <ul>
                                     <li><strong>Network Fairness (40%):</strong> How evenly bandwidth is distributed among users</li>
-                                    <li><strong>Latency Stability (30%):</strong> How consistent response times remain under load</li>
-                                    <li><strong>Individual User Performance (30%):</strong> Average of all four virtual users' individual grades</li>
+                                    <li><strong>Latency Stability (30%):</strong> Weighted stability prioritizing latency-sensitive users (Alex: 48%, Sarah: 48%, Jake: 4%, Computer: 0%)</li>
+                                    <li><strong>Individual User Performance (30%):</strong> Average of all four virtual users' individual grades using enhanced scoring</li>
                                 </ul>
-                                <p><strong>Calculation Steps:</strong></p>
+                                <p><strong>Enhanced Calculation Steps:</strong></p>
                                 <ul>
                                     <li>1. Calculate Network Fairness percentage using Jain's Fairness Index</li>
-                                    <li>2. Calculate Latency Stability percentage using coefficient of variation</li>
-                                    <li>3. Calculate individual user grades based on their specific requirements:
+                                    <li>2. Calculate Latency Stability using weighted user performance with updated thresholds</li>
+                                    <li>3. Calculate individual user grades with realistic requirements and forgiving penalties:
                                         <ul style="margin-top: 8px;">
-                                            <li><strong>Alex (Gaming):</strong> Prioritizes low latency and jitter (&lt;50ms ping, &lt;10ms jitter = A+)</li>
-                                            <li><strong>Sarah (Video Calls):</strong> Needs stable bandwidth and low jitter (2.5+ Mbps, &lt;20ms jitter = A+)</li>
-                                            <li><strong>Jake (Streaming):</strong> Requires consistent high throughput (25+ Mbps sustained = A+)</li>
-                                            <li><strong>Computer (Downloads):</strong> Tolerates higher latency but needs fair bandwidth allocation</li>
+                                            <li><strong>Alex (Gaming):</strong> 75ms latency, 30ms jitter thresholds with no penalty within 1.5x threshold</li>
+                                            <li><strong>Sarah (Video Calls):</strong> 150ms latency, 30ms jitter thresholds (realistic for video conferencing)</li>
+                                            <li><strong>Jake (Streaming):</strong> 300ms latency, 100ms jitter thresholds (tolerant for streaming applications)</li>
+                                            <li><strong>Computer (Downloads):</strong> 5000ms latency, 100ms jitter, 5.0% loss thresholds (very tolerant for background tasks)</li>
                                         </ul>
                                     </li>
-                                    <li>4. Combine using weighted formula: Overall = (Fairness × 0.4) + (Stability × 0.3) + (User Average × 0.3)</li>
-                                    <li>5. Convert final percentage to letter grade using standard scale</li>
+                                    <li>4. Apply generous grading scale: A+ ≥95%, A ≥90%, B ≥80%, C ≥70%, D ≥60%, F &lt;60%</li>
+                                    <li>5. Combine using weighted formula: Overall = (Fairness × 0.4) + (Stability × 0.3) + (User Average × 0.3)</li>
+                                    <li>6. Convert final percentage to letter grade using standard scale</li>
                                 </ul>
+                                <p><strong>Computer Safety Check:</strong> Computer user performance is flagged if latency exceeds 5000ms (increased from 3000ms for better tolerance of background tasks).</p>
                             </div>
                         </div>
                         

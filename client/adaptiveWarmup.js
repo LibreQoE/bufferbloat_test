@@ -288,7 +288,9 @@ class AdaptiveWarmup {
                             break;
                         }
                         
-                        bytesTransferred += value.length;
+                        if (value && value.length > 0) {
+                            bytesTransferred += value.length;
+                        }
                         
                         // Check if we've exceeded max duration
                         if ((performance.now() - startTime) >= maxDuration) {
@@ -299,10 +301,42 @@ class AdaptiveWarmup {
                     await reader.cancel();
                     clearTimeout(timeoutId);
                     
+                    // SPEED TEST FIX: Ensure we got some data
+                    if (bytesTransferred === 0) {
+                        console.warn(`⚠️ No data received from /download endpoint during speed test`);
+                        // Try a fallback approach with a smaller request
+                        const fallbackResponse = await fetch('/download?size=1048576', { // 1MB fallback
+                            method: 'GET',
+                            cache: 'no-store',
+                            headers: {
+                                'Pragma': 'no-cache',
+                                'Cache-Control': 'no-store'
+                            }
+                        });
+                        
+                        if (fallbackResponse.ok) {
+                            const fallbackData = await fallbackResponse.arrayBuffer();
+                            bytesTransferred = fallbackData.byteLength;
+                            console.log(`✅ Fallback download successful: ${bytesTransferred} bytes`);
+                        }
+                    }
+                    
                 } catch (error) {
                     clearTimeout(timeoutId);
                     if (error.name !== 'AbortError') {
-                        throw error;
+                        console.error(`❌ Download speed test error:`, error);
+                        // Try a simple fallback
+                        try {
+                            const fallbackResponse = await fetch('/download?size=1048576');
+                            if (fallbackResponse.ok) {
+                                const fallbackData = await fallbackResponse.arrayBuffer();
+                                bytesTransferred = fallbackData.byteLength;
+                                console.log(`✅ Error recovery successful: ${bytesTransferred} bytes`);
+                            }
+                        } catch (fallbackError) {
+                            console.error(`❌ Fallback also failed:`, fallbackError);
+                            throw error;
+                        }
                     }
                 }
                 

@@ -173,10 +173,25 @@ class ThroughputMonitor {
             console.warn(`  Current bytesReceived: ${bytesReceived}`);
             console.warn(`  Previous cumulativeBytesReceived: ${this.cumulativeBytesReceived}`);
             console.warn(`  Negative delta: ${bytesReceivedDelta}`);
-            console.warn(`  Using current bytesReceived as delta to handle reset`);
             
-            // When a reset occurs, use the current bytesReceived as the delta
-            bytesReceivedDelta = bytesReceived;
+            // RESET FIX: Check if this is a legitimate reset (new test phase)
+            const currentPhase = window.currentTestPhase || 'unknown';
+            const isPhaseTransition = this.lastPhase && this.lastPhase !== currentPhase;
+            
+            if (isPhaseTransition) {
+                console.warn(`  Phase transition detected: ${this.lastPhase} → ${currentPhase}`);
+                console.warn(`  Resetting cumulative counter for new phase`);
+                this.cumulativeBytesReceived = 0;
+                bytesReceivedDelta = bytesReceived;
+            } else {
+                console.warn(`  Using current bytesReceived as delta to handle reset`);
+                bytesReceivedDelta = bytesReceived;
+            }
+            
+            this.lastPhase = currentPhase;
+        } else {
+            // Track phase for reset detection
+            this.lastPhase = window.currentTestPhase || 'unknown';
         }
         
         this.cumulativeBytesReceived = bytesReceived;
@@ -209,17 +224,31 @@ class ThroughputMonitor {
         
         // 🔧 FIX: Handle byte counter resets (negative deltas)
         if (bytesSentDelta < 0) {
-            console.warn(`🔧 BYTE COUNTER RESET DETECTED:`);
+            console.warn(`🔧 UPLOAD BYTE COUNTER RESET DETECTED:`);
             console.warn(`  Current bytesSent: ${bytesSent}`);
             console.warn(`  Previous cumulativeBytesSent: ${this.cumulativeBytesSent}`);
             console.warn(`  Negative delta: ${bytesSentDelta}`);
             console.warn(`  Current phase: ${window.currentTestPhase}`);
             console.warn(`  Active upload streams: ${streamCount}`);
-            console.warn(`  Using current bytesSent as delta to handle reset`);
             
-            // When a reset occurs, use the current bytesSent as the delta
-            // This assumes the counter was reset to 0 and then accumulated to bytesSent
-            bytesSentDelta = bytesSent;
+            // RESET FIX: Check if this is a legitimate reset (new test phase)
+            const currentPhase = window.currentTestPhase || 'unknown';
+            const isPhaseTransition = this.lastUploadPhase && this.lastUploadPhase !== currentPhase;
+            
+            if (isPhaseTransition) {
+                console.warn(`  Upload phase transition detected: ${this.lastUploadPhase} → ${currentPhase}`);
+                console.warn(`  Resetting cumulative upload counter for new phase`);
+                this.cumulativeBytesSent = 0;
+                bytesSentDelta = bytesSent;
+            } else {
+                console.warn(`  Using current bytesSent as delta to handle reset`);
+                bytesSentDelta = bytesSent;
+            }
+            
+            this.lastUploadPhase = currentPhase;
+        } else {
+            // Track phase for reset detection
+            this.lastUploadPhase = window.currentTestPhase || 'unknown';
         }
         
         this.cumulativeBytesSent = bytesSent;

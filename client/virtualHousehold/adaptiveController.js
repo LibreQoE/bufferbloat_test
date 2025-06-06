@@ -72,6 +72,10 @@ class AdaptiveController {
         console.log('🔍 DEBUG: this.virtualHousehold available:', !!this.virtualHousehold);
         console.log('🔍 DEBUG: this.virtualHousehold.sendAdaptiveUpdate available:', typeof this.virtualHousehold?.sendAdaptiveUpdate);
         
+        // RESTART FIX: Always reset guard flag at start of new test
+        console.log('🔄 RESTART FIX: Resetting householdPhaseStarted flag for new test');
+        this.householdPhaseStarted = false;
+        
         this.testStartTime = performance.now();
         
         // Start progress monitoring

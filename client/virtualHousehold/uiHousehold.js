@@ -88,7 +88,7 @@ class UIHousehold {
                 targetDownload: 2.5,  // Mbps - realistic HD video call
                 targetUpload: 2.5,    // Mbps - realistic HD video call
                 activityType: 'video_call',
-                thresholds: { latency: 100, jitter: 30 }
+                thresholds: { latency: 150, jitter: 30 }
             },
             jake: {
                 name: 'Jake',
@@ -98,7 +98,7 @@ class UIHousehold {
                 targetDownload: 25.0, // Mbps
                 targetUpload: 0.1,    // Mbps - minimal Netflix telemetry
                 activityType: 'streaming',
-                thresholds: { latency: 200, jitter: 50 }
+                thresholds: { latency: 300, jitter: 100 }
             },
             computer: {
                 name: 'Computer',
@@ -108,7 +108,7 @@ class UIHousehold {
                 targetDownload: 200.0, // Mbps - will be updated by Phase 1 speed detection
                 targetUpload: 0.1,    // Mbps - minimal upload (100 Kbps)
                 activityType: 'bulk_transfer',
-                thresholds: { latency: 500, jitter: 100 },
+                thresholds: { latency: 5000, jitter: 100 },
                 adaptive: true // Mark as adaptive user
             }
         };

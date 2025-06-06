@@ -94,7 +94,7 @@ class VirtualHousehold {
                 connectionType: 'websocket',
                 metrics: ['latency', 'jitter'],
                 thresholds: {
-                    latency: 100,
+                    latency: 150,
                     jitter: 10,
                     loss: 0.5
                 },
@@ -135,8 +135,8 @@ class VirtualHousehold {
                 connectionType: 'websocket',
                 metrics: ['quality', 'buffering', 'drops'],
                 thresholds: {
-                    latency: 200,
-                    jitter: 20,
+                    latency: 300,
+                    jitter: 100,
                     loss: 1.0
                 },
                 statusMessages: {
@@ -176,9 +176,9 @@ class VirtualHousehold {
                 connectionType: 'websocket',
                 metrics: ['throughput', 'progress', 'impact'],
                 thresholds: {
-                    latency: 200,
-                    jitter: 50,
-                    loss: 2.0
+                    latency: 5000,
+                    jitter: 100,
+                    loss: 5.0
                 },
                 statusMessages: {
                     excellent: {
@@ -392,6 +392,12 @@ class VirtualHousehold {
             await this.stopTest();
             // Wait a moment for cleanup to complete
             await new Promise(resolve => setTimeout(resolve, 500));
+        }
+        
+        // RESTART FIX: Reset AdaptiveController guard flag to allow Phase 2 on restart
+        if (this.adaptiveController) {
+            this.logger.log('🔄 RESTART FIX: Resetting AdaptiveController guard flag for restart');
+            this.adaptiveController.householdPhaseStarted = false;
         }
         
         this.logger.log('🚀 Starting MANDATORY Two-Phase Virtual Household Test (Phase 1: Speed Detection + Phase 2: Household Saturation)');
@@ -1734,24 +1740,27 @@ class VirtualHousehold {
         
         let score = 100;
         
-        // Score based on user-specific thresholds
+        // More forgiving scoring: only penalize when significantly exceeding thresholds
         for (const [metricName, value] of Object.entries(avgMetrics)) {
             const threshold = config.thresholds[metricName];
             if (threshold && typeof threshold === 'number') {
-                if (value > threshold * 2) {
-                    score -= 30; // Poor performance
-                } else if (value > threshold) {
-                    score -= 15; // Fair performance
+                if (value > threshold * 3) {
+                    score -= 25; // Very poor performance (3x threshold)
+                } else if (value > threshold * 2) {
+                    score -= 15; // Poor performance (2x threshold)
+                } else if (value > threshold * 1.5) {
+                    score -= 8;  // Moderate performance (1.5x threshold)
                 }
+                // No penalty if within 1.5x threshold - this allows for normal network variation
             }
         }
         
-        // Convert score to grade
-        if (score >= 95) return 'A+';
-        if (score >= 90) return 'A';
-        if (score >= 80) return 'B';
-        if (score >= 70) return 'C';
-        if (score >= 60) return 'D';
+        // More generous grading scale
+        if (score >= 92) return 'A+';
+        if (score >= 85) return 'A';
+        if (score >= 75) return 'B';
+        if (score >= 65) return 'C';
+        if (score >= 55) return 'D';
         return 'F';
     }
     
@@ -1890,9 +1899,9 @@ class VirtualHousehold {
         // and monitors Computer's safety threshold
         
         const userWeights = {
-            alex: 0.45,    // 45% - Primary latency-sensitive (gaming)
-            sarah: 0.45,   // 45% - Primary latency-sensitive (video calls)
-            jake: 0.10,    // 10% - Secondary consideration (streaming)
+            alex: 0.48,    // 48% - Primary latency-sensitive (gaming)
+            sarah: 0.48,   // 48% - Primary latency-sensitive (video calls)
+            jake: 0.04,    // 4% - Secondary consideration (streaming)
             computer: 0.0  // 0% - Not included in stability scoring
         };
         
@@ -2031,14 +2040,14 @@ class VirtualHousehold {
     }
     
     calculateComputerSafetyScore(userId, userData) {
-        // For Computer - simple safety check: must stay <3000ms
+        // For Computer - simple safety check: must stay <5000ms
         const latencies = userData.metrics
             .map(m => m.latency)
             .filter(l => l !== undefined && l !== null);
         
         if (latencies.length === 0) return 0; // Neutral if no data
         
-        const safetyThreshold = 3000; // ms
+        const safetyThreshold = 5000; // ms
         const maxLatency = Math.max(...latencies);
         const violationCount = latencies.filter(l => l > safetyThreshold).length;
         
@@ -2300,8 +2309,8 @@ class VirtualHousehold {
                 const alexAvg = alexLatencies.length > 0 ? alexLatencies.reduce((a, b) => a + b) / alexLatencies.length : 0;
                 const alexSpikes = alexLatencies.filter(l => l > 150).length;
                 
-                if (alexAvg > 100) {
-                    latencyIssues.push(`Alex's gaming averages ${alexAvg.toFixed(0)}ms (target: ≤100ms)`);
+                if (alexAvg > 75) {
+                    latencyIssues.push(`Alex's gaming averages ${alexAvg.toFixed(0)}ms (target: ≤75ms)`);
                 }
                 if (alexSpikes > alexLatencies.length * 0.1) {
                     latencyIssues.push(`Alex experiences frequent latency spikes (${alexSpikes} spikes >150ms)`);
@@ -2313,8 +2322,8 @@ class VirtualHousehold {
                 const sarahAvg = sarahLatencies.length > 0 ? sarahLatencies.reduce((a, b) => a + b) / sarahLatencies.length : 0;
                 const sarahSpikes = sarahLatencies.filter(l => l > 150).length;
                 
-                if (sarahAvg > 100) {
-                    latencyIssues.push(`Sarah's video calls average ${sarahAvg.toFixed(0)}ms (target: ≤100ms)`);
+                if (sarahAvg > 150) {
+                    latencyIssues.push(`Sarah's video calls average ${sarahAvg.toFixed(0)}ms (target: ≤150ms)`);
                 }
                 if (sarahSpikes > sarahLatencies.length * 0.1) {
                     latencyIssues.push(`Sarah experiences frequent call quality issues (${sarahSpikes} spikes >150ms)`);
@@ -2342,13 +2351,13 @@ class VirtualHousehold {
         
         const computerLatencies = computerData.metrics.map(m => m.latency).filter(l => l !== undefined);
         const maxLatency = computerLatencies.length > 0 ? Math.max(...computerLatencies) : 0;
-        const violations = computerLatencies.filter(l => l > 3000).length;
+        const violations = computerLatencies.filter(l => l > 5000).length;
         
         if (violations > 0) {
             recommendations.push({
                 type: 'error',
                 title: 'Network Safety Threshold Violated',
-                description: `Computer downloads caused extreme latency (max: ${maxLatency.toFixed(0)}ms, ${violations} violations >3000ms). This indicates severe bufferbloat that could make the network unusable. Implement SQM immediately.`
+                description: `Computer downloads caused extreme latency (max: ${maxLatency.toFixed(0)}ms, ${violations} violations >5000ms). This indicates severe bufferbloat that could make the network unusable. Implement SQM immediately.`
             });
         } else if (maxLatency > 2000) {
             recommendations.push({
