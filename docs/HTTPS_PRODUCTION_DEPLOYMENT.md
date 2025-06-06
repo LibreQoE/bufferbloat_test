@@ -231,6 +231,61 @@ health_url = f"{'https' if ssl_enabled else 'http'}://localhost:{port}/health"
 
 ### Common Issues
 
+#### Server Starts But Only Worker Processes Function
+**Symptoms**: Worker processes (ports 8001-8004) start successfully, but main server (port 443) doesn't start and health checks fail.
+
+**Root Cause**: This typically occurs when moving from a root-only VPS to a sudo-based environment.
+
+**Solution**:
+1. **Fix systemd service configuration** - Update service to run as non-root user:
+   ```bash
+   # First, determine your username
+   USERNAME=$(whoami)
+   
+   # Edit /etc/systemd/system/libreqos-bufferbloat.service
+   # Replace YOUR_USERNAME with your actual username in the service file:
+   sudo sed -i "s/YOUR_USERNAME/$USERNAME/g" /etc/systemd/system/libreqos-bufferbloat.service
+   
+   # Or manually edit the service file:
+   # [Service]
+   # User=$USERNAME
+   # Group=$USERNAME
+   # SupplementaryGroups=ssl-cert
+   # AmbientCapabilities=CAP_NET_BIND_SERVICE
+   # CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+   ```
+
+2. **Set up SSL certificate access**:
+   ```bash
+   # Get current username
+   USERNAME=$(whoami)
+   
+   # Create ssl-cert group if it doesn't exist
+   sudo groupadd ssl-cert
+   
+   # Add current user to ssl-cert group
+   sudo usermod -a -G ssl-cert $USERNAME
+   
+   # Set proper group ownership for certificates
+   sudo chgrp -R ssl-cert /etc/letsencrypt/live/ /etc/letsencrypt/archive/
+   sudo chmod -R g+rx /etc/letsencrypt/live/ /etc/letsencrypt/archive/
+   ```
+
+3. **Install missing dependencies**:
+   ```bash
+   # Install aiohttp for health checks
+   pip3 install aiohttp
+   
+   # Or install all requirements
+   pip3 install -r server/requirements.txt
+   ```
+
+4. **Reload and restart service**:
+   ```bash
+   sudo systemctl daemon-reload
+   sudo systemctl restart libreqos-bufferbloat.service
+   ```
+
 #### Certificate Files Not Found (`[Errno 2] No such file or directory`)
 This error occurs when SSL certificate files don't exist:
 
@@ -248,6 +303,20 @@ sudo ./setup_ssl_certificates.sh
 # Verify files exist and have correct permissions
 ls -la ssl/
 # cert.pem should be 644, key.pem should be 600
+```
+
+#### Missing Dependencies (`ModuleNotFoundError: No module named 'aiohttp'`)
+The health check system requires aiohttp for HTTPS health monitoring:
+
+```bash
+# Install missing dependency
+pip3 install aiohttp
+
+# Or install all requirements
+pip3 install -r server/requirements.txt
+
+# Restart service after installing
+sudo systemctl restart libreqos-bufferbloat.service
 ```
 
 #### Domain Validation Failed in SSL Setup
