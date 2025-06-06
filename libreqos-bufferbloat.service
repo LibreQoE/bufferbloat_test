@@ -4,9 +4,14 @@ After=network.target
 
 [Service]
 Type=simple
-User=root
+User=YOUR_USERNAME
+Group=YOUR_USERNAME
+SupplementaryGroups=ssl-cert
 WorkingDirectory=/opt/libreqos_test
+Environment=ENABLE_SIMPLE_MULTIPROCESS=true
 ExecStart=/usr/bin/python3 /opt/libreqos_test/start_simple_multiprocess.py --ssl-certfile /opt/libreqos_test/ssl/cert.pem --ssl-keyfile /opt/libreqos_test/ssl/key.pem --port 443
+AmbientCapabilities=CAP_NET_BIND_SERVICE
+CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 ExecStop=/bin/bash -c 'pkill -9 -f "multiprocess.py" || true; pkill -9 -f "simple_user_process.py" || true'
 Restart=on-failure
 RestartSec=10

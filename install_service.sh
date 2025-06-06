@@ -1,62 +1,91 @@
 #!/bin/bash
 
-# LibreQoS Bufferbloat Test - Systemd Service Installation Script
-# This script installs the LibreQoS Bufferbloat Test as a systemd service
+# LibreQoS Bufferbloat Test - Service Installation Script
+# This script configures and installs the systemd service with the correct username
+
+set -e
+
+echo "🚀 LibreQoS Bufferbloat Test - Service Installation"
+echo "=================================================="
+
+# Get current username
+USERNAME=$(whoami)
+echo "📋 Detected username: $USERNAME"
 
 # Check if running as root
-if [ "$EUID" -ne 0 ]; then
-  echo "Please run as root (sudo ./install_service.sh)"
-  exit 1
+if [ "$EUID" -eq 0 ]; then
+    echo "❌ Error: Do not run this script as root"
+    echo "   Run as your regular user account that will run the service"
+    exit 1
 fi
 
-echo "Installing LibreQoS Bufferbloat Test as a systemd service..."
-
-# Copy the service file to systemd directory
-cp libreqos-bufferbloat.service /etc/systemd/system/
-if [ $? -ne 0 ]; then
-  echo "Failed to copy service file. Aborting."
-  exit 1
+# Check if service file exists
+if [ ! -f "libreqos-bufferbloat.service" ]; then
+    echo "❌ Error: libreqos-bufferbloat.service file not found"
+    echo "   Make sure you're running this from the LibreQoS directory"
+    exit 1
 fi
 
-echo "Service file copied to /etc/systemd/system/"
+# Create a temporary service file with the correct username
+echo "🔧 Configuring service file for user: $USERNAME"
+cp libreqos-bufferbloat.service libreqos-bufferbloat.service.tmp
+sed -i "s/YOUR_USERNAME/$USERNAME/g" libreqos-bufferbloat.service.tmp
 
-# Reload systemd daemon
-systemctl daemon-reload
-if [ $? -ne 0 ]; then
-  echo "Failed to reload systemd daemon. Aborting."
-  exit 1
+# Install dependencies
+echo "📦 Installing Python dependencies..."
+pip3 install -r server/requirements.txt
+
+# Set up SSL certificate access
+echo "🔒 Setting up SSL certificate access..."
+
+# Create ssl-cert group if it doesn't exist
+if ! getent group ssl-cert > /dev/null 2>&1; then
+    echo "   Creating ssl-cert group..."
+    sudo groupadd ssl-cert
+else
+    echo "   ssl-cert group already exists"
 fi
 
-echo "Systemd daemon reloaded"
+# Add user to ssl-cert group
+echo "   Adding $USERNAME to ssl-cert group..."
+sudo usermod -a -G ssl-cert $USERNAME
 
-# Enable the service
-systemctl enable libreqos-bufferbloat.service
-if [ $? -ne 0 ]; then
-  echo "Failed to enable service. Aborting."
-  exit 1
+# Set up certificate permissions if Let's Encrypt directory exists
+if [ -d "/etc/letsencrypt" ]; then
+    echo "   Setting Let's Encrypt certificate permissions..."
+    sudo chgrp -R ssl-cert /etc/letsencrypt/live/ /etc/letsencrypt/archive/ 2>/dev/null || true
+    sudo chmod -R g+rx /etc/letsencrypt/live/ /etc/letsencrypt/archive/ 2>/dev/null || true
+else
+    echo "   Let's Encrypt directory not found - will be configured when certificates are created"
 fi
 
-echo "Service enabled to start on boot"
+# Install systemd service
+echo "⚙️  Installing systemd service..."
+sudo cp libreqos-bufferbloat.service.tmp /etc/systemd/system/libreqos-bufferbloat.service
+rm libreqos-bufferbloat.service.tmp
 
-# Start the service
-systemctl start libreqos-bufferbloat.service
-if [ $? -ne 0 ]; then
-  echo "Failed to start service. Check logs with: journalctl -u libreqos-bufferbloat.service"
-  exit 1
-fi
+# Reload systemd
+echo "🔄 Reloading systemd daemon..."
+sudo systemctl daemon-reload
 
-echo "Service started successfully"
-
-# Check service status
-echo "Service status:"
-systemctl status libreqos-bufferbloat.service --no-pager
+# Enable service
+echo "✅ Enabling service for auto-start..."
+sudo systemctl enable libreqos-bufferbloat.service
 
 echo ""
-echo "Installation complete!"
-echo "You can access the LibreQoS Bufferbloat Test at: http://$(hostname -I | awk '{print $1}'):80/"
+echo "🎉 Installation complete!"
 echo ""
-echo "To view logs: journalctl -u libreqos-bufferbloat.service -f"
-echo "To stop service: systemctl stop libreqos-bufferbloat.service"
-echo "To restart service: systemctl restart libreqos-bufferbloat.service"
-
-exit 0
+echo "Next steps:"
+echo "1. Set up SSL certificates (if not already done):"
+echo "   sudo ./setup_ssl_certificates.sh"
+echo ""
+echo "2. Start the service:"
+echo "   sudo systemctl start libreqos-bufferbloat.service"
+echo ""
+echo "3. Check service status:"
+echo "   sudo systemctl status libreqos-bufferbloat.service"
+echo ""
+echo "4. View logs:"
+echo "   sudo journalctl -u libreqos-bufferbloat.service -f"
+echo ""
+echo "⚠️  Note: You may need to log out and back in for group membership changes to take effect"

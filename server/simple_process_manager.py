@@ -298,16 +298,15 @@ class SimpleProcessManager:
             url = f"{protocol}://localhost:{port}/health"
             
             # Create SSL context for HTTPS health checks
-            ssl_context = None
+            connector = None
             if self.ssl_enabled:
                 ssl_context = ssl.create_default_context()
                 ssl_context.check_hostname = False  # Allow localhost
                 ssl_context.verify_mode = ssl.CERT_NONE  # Skip cert verification for health checks
-            
-            connector = aiohttp.TCPConnector(ssl=ssl_context) if self.ssl_enabled else None
+                connector = aiohttp.TCPConnector(ssl=ssl_context)
             
             async with aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=2.0),
+                timeout=aiohttp.ClientTimeout(total=5.0),  # Increased timeout
                 connector=connector
             ) as session:
                 async with session.get(url) as response:
