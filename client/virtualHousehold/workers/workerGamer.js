@@ -6,16 +6,30 @@
 
 // Web Worker global scope variables
 let gamerWorker = null;
+let antiChunkingManager = null;
+
+// Import anti-chunking manager if available
+if (typeof importScripts !== 'undefined') {
+    try {
+        importScripts('../antiChunkingManager.js');
+        antiChunkingManager = new AntiChunkingManager();
+        console.log('🎮 Gaming worker: Anti-chunking manager loaded');
+    } catch (error) {
+        console.warn('🎮 Gaming worker: Anti-chunking manager not available:', error.message);
+    }
+}
 
 class SimpleGamerWorker {
     constructor(dataChannel, config = {}) {
         this.dataChannel = dataChannel;
         this.config = {
             userId: config.userId || 'gamer',
-            targetThroughput: 1000000, // 1 Mbps total (500k each direction)
-            packetSize: 1000, // 1KB packets
-            sendInterval: 8, // Send every 8ms for 125 packets/sec = 1Mbps
+            targetThroughput: 310000, // 0.31 Mbps total (realistic gaming)
+            packetSize: () => 64 + Math.floor(Math.random() * 64), // 64-128 bytes randomized
+            sendInterval: 25, // Send every 25ms for 40 packets/sec (realistic gaming)
             dscp: 'EF',
+            uploadRatio: 0.3, // 30% upload (commands)
+            downloadRatio: 0.7, // 70% download (game state)
             ...config
         };
         
@@ -53,34 +67,78 @@ class SimpleGamerWorker {
         if (!this.isActive) return;
         
         try {
-            // Create simple game packet
-            const packet = new ArrayBuffer(this.config.packetSize);
+            // Determine if this is an upload (command) or download (state) packet
+            const isUpload = Math.random() < this.config.uploadRatio;
+            
+            // Get realistic packet size (64-128 bytes)
+            const packetSize = typeof this.config.packetSize === 'function' ?
+                this.config.packetSize() : this.config.packetSize;
+            
+            // Create realistic game packet
+            const packet = new ArrayBuffer(packetSize);
             const view = new DataView(packet);
             
-            // Simple header
-            view.setUint32(0, this.stats.packetsSent, true); // Sequence
+            // Realistic gaming header (12 bytes)
+            view.setUint32(0, this.stats.packetsSent, true); // Sequence number
             view.setUint32(4, performance.now() & 0xFFFFFFFF, true); // Timestamp
-            view.setUint32(8, this.config.packetSize, true); // Size
+            view.setUint8(8, isUpload ? 1 : 0); // Direction flag (1=upload, 0=download)
+            view.setUint8(9, packetSize); // Packet size
+            view.setUint16(10, isUpload ? 0x434D : 0x5354, true); // Type: "CM"=command, "ST"=state
             
-            // Fill with gaming data pattern
-            for (let i = 12; i < this.config.packetSize - 4; i += 4) {
-                view.setUint32(i, 0x47414D45, true); // "GAME" pattern
+            // Fill remaining bytes with realistic gaming data
+            if (isUpload) {
+                // Upload: Game commands/input (smaller, more frequent)
+                for (let i = 12; i < packetSize - 4; i += 2) {
+                    view.setUint16(i, Math.floor(Math.random() * 65536), true); // Random input data
+                }
+            } else {
+                // Download: Game state updates (larger, less frequent)
+                for (let i = 12; i < packetSize - 4; i += 4) {
+                    view.setUint32(i, 0x47414D45 + (this.stats.packetsSent % 256), true); // "GAME" + sequence
+                }
             }
             
-            // Send packet
-            this.dataChannel.send(packet);
-            
-            // Update stats
-            this.stats.packetsSent++;
-            this.stats.bytesSent += packet.byteLength;
-            
-            // Send traffic update every 100 packets
-            if (this.stats.packetsSent % 100 === 0) {
-                this.dispatchTrafficUpdate();
+            // Use anti-chunking manager if available, otherwise use direct transmission
+            const transmitPacket = () => {
+                if (this.isActive) {
+                    this.dataChannel.send(packet);
+                    
+                    // Update stats
+                    this.stats.packetsSent++;
+                    this.stats.bytesSent += packet.byteLength;
+                    
+                    // Track upload/download separately
+                    if (isUpload) {
+                        this.stats.uploadPackets = (this.stats.uploadPackets || 0) + 1;
+                        this.stats.uploadBytes = (this.stats.uploadBytes || 0) + packet.byteLength;
+                    } else {
+                        this.stats.downloadPackets = (this.stats.downloadPackets || 0) + 1;
+                        this.stats.downloadBytes = (this.stats.downloadBytes || 0) + packet.byteLength;
+                    }
+                    
+                    // Send traffic update every 40 packets (once per second at 25ms intervals)
+                    if (this.stats.packetsSent % 40 === 0) {
+                        this.dispatchTrafficUpdate();
+                    }
+                }
+            };
+
+            if (antiChunkingManager) {
+                // Use anti-chunking manager for CAKE-optimized transmission
+                antiChunkingManager.scheduleTransmission(
+                    this.config.userId,
+                    packet,
+                    'gaming',
+                    transmitPacket
+                );
+            } else {
+                // Fallback: Add small timing jitter to prevent synchronization (±2ms)
+                const jitter = (Math.random() - 0.5) * 4; // -2ms to +2ms
+                setTimeout(transmitPacket, Math.max(0, jitter));
             }
             
         } catch (error) {
-            console.error('❌ Failed to send game packet:', error);
+            console.error('❌ Failed to send realistic game packet:', error);
         }
     }
     

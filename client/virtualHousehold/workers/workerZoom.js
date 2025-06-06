@@ -6,16 +6,31 @@
 
 // Web Worker global scope variables
 let zoomWorker = null;
+let antiChunkingManager = null;
+
+// Import anti-chunking manager if available
+if (typeof importScripts !== 'undefined') {
+    try {
+        importScripts('../antiChunkingManager.js');
+        antiChunkingManager = new AntiChunkingManager();
+        console.log('💼 Video worker: Anti-chunking manager loaded');
+    } catch (error) {
+        console.warn('💼 Video worker: Anti-chunking manager not available:', error.message);
+    }
+}
 
 class SimpleZoomWorker {
     constructor(dataChannel, config = {}) {
         this.dataChannel = dataChannel;
         this.config = {
             userId: config.userId || 'worker',
-            targetThroughput: 3500000, // 3.5 Mbps total (1.75 Mbps each direction)
-            packetSize: 1400, // 1.4KB packets (typical video frame size)
-            sendInterval: 3.2, // Send every 3.2ms for ~312 packets/sec = 3.5Mbps
+            targetThroughput: 3600000, // 3.6 Mbps total (1.8 Mbps each direction)
+            packetSize: () => 800 + Math.floor(Math.random() * 200), // 800-1000 bytes randomized
+            sendInterval: 20, // Send every 20ms for 50 frames/sec (realistic video)
             dscp: 'AF41',
+            uploadRatio: 0.5, // 50% upload (local video/audio)
+            downloadRatio: 0.5, // 50% download (remote video/audio)
+            frameCounter: 0, // Track frame types for realistic video simulation
             ...config
         };
         
@@ -53,35 +68,105 @@ class SimpleZoomWorker {
         if (!this.isActive) return;
         
         try {
-            // Create simple video packet
-            const packet = new ArrayBuffer(this.config.packetSize);
-            const view = new DataView(packet);
+            // Determine if this is upload (local stream) or download (remote stream)
+            const isUpload = Math.random() < this.config.uploadRatio;
             
-            // Simple header
-            view.setUint32(0, this.stats.packetsSent, true); // Sequence
-            view.setUint32(4, performance.now() & 0xFFFFFFFF, true); // Timestamp
-            view.setUint32(8, this.config.packetSize, true); // Size
-            view.setUint8(12, this.stats.packetsSent % 30 === 0 ? 1 : 0); // Key frame flag
+            // Increment frame counter for realistic video frame types
+            this.config.frameCounter++;
             
-            // Fill with video data pattern
-            for (let i = 16; i < this.config.packetSize - 4; i += 4) {
-                view.setUint32(i, 0x56494445, true); // "VIDE" pattern
+            // Determine frame type (I/P/B frames for realistic video encoding)
+            let frameType, packetSize;
+            const frameInGOP = this.config.frameCounter % 30; // Group of Pictures = 30 frames
+            
+            if (frameInGOP === 0) {
+                // I-frame (keyframe) - larger packets every 30 frames
+                frameType = 'I';
+                packetSize = 1200 + Math.floor(Math.random() * 200); // 1200-1400 bytes
+            } else if (frameInGOP % 3 === 0) {
+                // P-frame (predicted) - medium packets
+                frameType = 'P';
+                packetSize = typeof this.config.packetSize === 'function' ?
+                    this.config.packetSize() : this.config.packetSize; // 800-1000 bytes
+            } else {
+                // B-frame (bidirectional) - smaller packets
+                frameType = 'B';
+                packetSize = 600 + Math.floor(Math.random() * 200); // 600-800 bytes
             }
             
-            // Send packet
-            this.dataChannel.send(packet);
+            // Create realistic video packet
+            const packet = new ArrayBuffer(packetSize);
+            const view = new DataView(packet);
             
-            // Update stats
-            this.stats.packetsSent++;
-            this.stats.bytesSent += packet.byteLength;
+            // Realistic video header (16 bytes)
+            view.setUint32(0, this.stats.packetsSent, true); // Sequence number
+            view.setUint32(4, performance.now() & 0xFFFFFFFF, true); // Timestamp
+            view.setUint8(8, isUpload ? 1 : 0); // Direction flag (1=upload, 0=download)
+            view.setUint8(9, frameType.charCodeAt(0)); // Frame type (I/P/B)
+            view.setUint16(10, packetSize, true); // Packet size
+            view.setUint32(12, frameInGOP, true); // Frame position in GOP
             
-            // Send traffic update every 100 packets
-            if (this.stats.packetsSent % 100 === 0) {
-                this.dispatchTrafficUpdate();
+            // Fill with realistic video data patterns
+            if (frameType === 'I') {
+                // I-frame: More complex data (keyframe)
+                for (let i = 16; i < packetSize - 4; i += 4) {
+                    view.setUint32(i, 0x49465241 + (i % 256), true); // "IFRA" + variation
+                }
+            } else if (frameType === 'P') {
+                // P-frame: Predicted frame data
+                for (let i = 16; i < packetSize - 4; i += 4) {
+                    view.setUint32(i, 0x50465241 + (this.stats.packetsSent % 256), true); // "PFRA" + sequence
+                }
+            } else {
+                // B-frame: Bidirectional frame data
+                for (let i = 16; i < packetSize - 4; i += 4) {
+                    view.setUint32(i, 0x42465241 + (frameInGOP % 256), true); // "BFRA" + GOP position
+                }
+            }
+            
+            // Use anti-chunking manager if available, otherwise use direct transmission
+            const transmitPacket = () => {
+                if (this.isActive) {
+                    this.dataChannel.send(packet);
+                    
+                    // Update stats
+                    this.stats.packetsSent++;
+                    this.stats.bytesSent += packet.byteLength;
+                    
+                    // Track upload/download and frame types separately
+                    if (isUpload) {
+                        this.stats.uploadPackets = (this.stats.uploadPackets || 0) + 1;
+                        this.stats.uploadBytes = (this.stats.uploadBytes || 0) + packet.byteLength;
+                    } else {
+                        this.stats.downloadPackets = (this.stats.downloadPackets || 0) + 1;
+                        this.stats.downloadBytes = (this.stats.downloadBytes || 0) + packet.byteLength;
+                    }
+                    
+                    // Track frame type stats
+                    this.stats[`${frameType}Frames`] = (this.stats[`${frameType}Frames`] || 0) + 1;
+                    
+                    // Send traffic update every 50 packets (once per second at 20ms intervals)
+                    if (this.stats.packetsSent % 50 === 0) {
+                        this.dispatchTrafficUpdate();
+                    }
+                }
+            };
+
+            if (antiChunkingManager) {
+                // Use anti-chunking manager for CAKE-optimized transmission
+                antiChunkingManager.scheduleTransmission(
+                    this.config.userId,
+                    packet,
+                    'video',
+                    transmitPacket
+                );
+            } else {
+                // Fallback: Add small timing jitter to prevent synchronization (±1ms for video)
+                const jitter = (Math.random() - 0.5) * 2; // -1ms to +1ms
+                setTimeout(transmitPacket, Math.max(0, jitter));
             }
             
         } catch (error) {
-            console.error('❌ Failed to send video packet:', error);
+            console.error('❌ Failed to send realistic video packet:', error);
         }
     }
     

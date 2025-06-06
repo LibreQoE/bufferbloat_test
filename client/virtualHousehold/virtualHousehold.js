@@ -47,8 +47,8 @@ class VirtualHousehold {
                 description: 'Gaming with low latency needs',
                 activity: 'Competitive Gaming',
                 color: '#45b7d1',
-                targetDownload: 1.5,  // Mbps - realistic gaming
-                targetUpload: 0.75,   // Mbps - realistic gaming
+                targetDownload: 0.215,  // Mbps - realistic gaming download (calculated)
+                targetUpload: 0.092,    // Mbps - realistic gaming upload (calculated)
                 activityType: 'gaming',
                 connectionType: 'websocket',
                 metrics: ['latency', 'jitter'],
@@ -88,8 +88,8 @@ class VirtualHousehold {
                 description: 'HD video conferencing',
                 activity: 'Microsoft Teams',
                 color: '#45b7d1',
-                targetDownload: 2.5,  // Mbps - realistic HD video call
-                targetUpload: 2.5,    // Mbps - realistic HD video call
+                targetDownload: 1.8,  // Mbps - realistic HD video call download (calculated)
+                targetUpload: 1.8,    // Mbps - realistic HD video call upload (calculated)
                 activityType: 'video_call',
                 connectionType: 'websocket',
                 metrics: ['latency', 'jitter'],
