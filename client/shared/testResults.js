@@ -152,22 +152,38 @@ function renderStatisticsTables(statistics, explanationContent = null, userResul
                             <th>Phase</th>
                             <th>Median</th>
                             <th>Average</th>
-                            <th>25th %</th>
+                            <th class="hide-mobile-25th">25th %</th>
                             <th>75th %</th>
                             <th>95th %</th>
                         </tr>
                     </thead>
                     <tbody>
-                        ${statistics.latency.map(stat => `
-                            <tr>
-                                <td>${stat.phase}</td>
-                                <td>${formatStatValue(stat.median)}</td>
-                                <td>${formatStatValue(stat.average)}</td>
-                                <td>${formatStatValue(stat.p25)}</td>
-                                <td>${formatStatValue(stat.p75)}</td>
-                                <td>${formatStatValue(stat.p95)}</td>
-                            </tr>
-                        `).join('')}
+                        ${statistics.latency.map(stat => {
+                            // Add specific arrows for each phase type
+                            let phaseDisplay = stat.phase;
+                            const phaseLower = stat.phase.toLowerCase();
+                            
+                            if (phaseLower.includes('baseline')) {
+                                phaseDisplay = `<span class="direction-text">${stat.phase}</span><span class="direction-arrow">➡️</span>`;
+                            } else if (phaseLower.includes('download')) {
+                                phaseDisplay = `<span class="direction-text">${stat.phase}</span><span class="direction-arrow">⬇️</span>`;
+                            } else if (phaseLower.includes('upload')) {
+                                phaseDisplay = `<span class="direction-text">${stat.phase}</span><span class="direction-arrow">⬆️</span>`;
+                            } else if (phaseLower.includes('bidirectional')) {
+                                phaseDisplay = `<span class="direction-text">${stat.phase}</span><span class="direction-arrow">↕️</span>`;
+                            }
+                            
+                            return `
+                                <tr>
+                                    <td>${phaseDisplay}</td>
+                                    <td>${formatStatValue(stat.median)}</td>
+                                    <td>${formatStatValue(stat.average)}</td>
+                                    <td class="hide-mobile-25th">${formatStatValue(stat.p25)}</td>
+                                    <td>${formatStatValue(stat.p75)}</td>
+                                    <td>${formatStatValue(stat.p95)}</td>
+                                </tr>
+                            `;
+                        }).join('')}
                     </tbody>
                 </table>
             </div>
@@ -189,14 +205,32 @@ function renderStatisticsTables(statistics, explanationContent = null, userResul
                         </tr>
                     </thead>
                     <tbody>
-                        ${statistics.throughput.map(stat => `
-                            <tr>
-                                <td>${stat.phase}</td>
-                                <td>${formatStatValue(stat.median)}</td>
-                                <td>${formatStatValue(stat.average)}</td>
-                                <td>${formatStatValue(stat.p75)}</td>
-                            </tr>
-                        `).join('')}
+                        ${statistics.throughput.map(stat => {
+                            // Add specific arrows for each phase type
+                            let phaseDisplay = stat.phase;
+                            const phaseLower = stat.phase.toLowerCase();
+                            
+                            if (phaseLower.includes('baseline')) {
+                                phaseDisplay = `<span class="direction-text">${stat.phase}</span><span class="direction-arrow">➡️</span>`;
+                            } else if (phaseLower.includes('download') && phaseLower.includes('bidirectional')) {
+                                phaseDisplay = `<span class="direction-text">${stat.phase}</span><span class="direction-arrow">↕️⬇️</span>`;
+                            } else if (phaseLower.includes('upload') && phaseLower.includes('bidirectional')) {
+                                phaseDisplay = `<span class="direction-text">${stat.phase}</span><span class="direction-arrow">↕️⬆️</span>`;
+                            } else if (phaseLower.includes('download')) {
+                                phaseDisplay = `<span class="direction-text">${stat.phase}</span><span class="direction-arrow">⬇️</span>`;
+                            } else if (phaseLower.includes('upload')) {
+                                phaseDisplay = `<span class="direction-text">${stat.phase}</span><span class="direction-arrow">⬆️</span>`;
+                            }
+                            
+                            return `
+                                <tr>
+                                    <td>${phaseDisplay}</td>
+                                    <td>${formatStatValue(stat.median)}</td>
+                                    <td>${formatStatValue(stat.average)}</td>
+                                    <td>${formatStatValue(stat.p75)}</td>
+                                </tr>
+                            `;
+                        }).join('')}
                     </tbody>
                 </table>
             </div>
@@ -208,17 +242,28 @@ function renderStatisticsTables(statistics, explanationContent = null, userResul
         html += `
             <div class="stats-table-container">
                 <h3 class="centered-title">Network Performance Metrics</h3>
-                <table class="stats-table">
-                    <tbody>
-                        ${statistics.custom.map(stat => `
-                            <tr>
-                                <td>${stat.label}</td>
-                                <td><strong>${stat.value}</strong></td>
-                                ${stat.description ? `<td class="description">${stat.description}</td>` : ''}
-                            </tr>
-                        `).join('')}
-                    </tbody>
-                </table>
+                <div class="desktop-table">
+                    <table class="stats-table">
+                        <tbody>
+                            ${statistics.custom.map(stat => `
+                                <tr>
+                                    <td>${stat.label}</td>
+                                    <td><strong>${stat.value}</strong></td>
+                                    ${stat.description ? `<td class="description">${stat.description}</td>` : ''}
+                                </tr>
+                            `).join('')}
+                        </tbody>
+                    </table>
+                </div>
+                <div class="network-metrics-container">
+                    ${statistics.custom.map(stat => `
+                        <div class="network-metric-card">
+                            <div class="metric-label">${stat.label}</div>
+                            <div class="metric-value"><strong>${stat.value}</strong></div>
+                            ${stat.description ? `<div class="metric-description">${stat.description}</div>` : ''}
+                        </div>
+                    `).join('')}
+                </div>
             </div>
         `;
     }
@@ -286,21 +331,49 @@ function renderUserLatencyTable(user) {
     return `
         <div class="stats-table-container">
             <h5>Latency Statistics (ms)</h5>
-            <table class="stats-table">
-                <thead>
-                    <tr>
-                        <th>Metric</th>
-                        <th>Value</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr><td>Median</td><td>${formatStatValue(latency.median)}</td></tr>
-                    <tr><td>Average</td><td>${formatStatValue(latency.average)}</td></tr>
-                    <tr><td>25th %</td><td>${formatStatValue(latency.p25)}</td></tr>
-                    <tr><td>75th %</td><td>${formatStatValue(latency.p75)}</td></tr>
-                    <tr><td>95th %</td><td>${formatStatValue(latency.p95)}</td></tr>
-                </tbody>
-            </table>
+            <div class="desktop-table">
+                <table class="stats-table">
+                    <thead>
+                        <tr>
+                            <th>Metric</th>
+                            <th>Value</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>Median</td><td>${formatStatValue(latency.median)}</td></tr>
+                        <tr><td>Average</td><td>${formatStatValue(latency.average)}</td></tr>
+                        <tr><td class="hide-mobile-25th">25th %</td><td class="hide-mobile-25th">${formatStatValue(latency.p25)}</td></tr>
+                        <tr><td>75th %</td><td>${formatStatValue(latency.p75)}</td></tr>
+                        <tr><td>95th %</td><td>${formatStatValue(latency.p95)}</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="mobile-stats-cards">
+                <div class="stat-card">
+                    <div class="stat-row">
+                        <span class="stat-label">Median</span>
+                        <span class="stat-value">${formatStatValue(latency.median)}</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-row">
+                        <span class="stat-label">Average</span>
+                        <span class="stat-value">${formatStatValue(latency.average)}</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-row">
+                        <span class="stat-label">75th %</span>
+                        <span class="stat-value">${formatStatValue(latency.p75)}</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-row">
+                        <span class="stat-label">95th %</span>
+                        <span class="stat-value">${formatStatValue(latency.p95)}</span>
+                    </div>
+                </div>
+            </div>
         </div>
     `;
 }
@@ -316,30 +389,58 @@ function renderUserThroughputTable(user) {
     return `
         <div class="stats-table-container">
             <h5>Throughput Statistics (Mbps)</h5>
-            <table class="stats-table">
-                <thead>
-                    <tr>
-                        <th>Direction</th>
-                        <th>Median</th>
-                        <th>Average</th>
-                        <th>75th %</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    <tr>
-                        <td>Download</td>
-                        <td>${formatStatValue(throughput.download.median)}</td>
-                        <td>${formatStatValue(throughput.download.average)}</td>
-                        <td>${formatStatValue(throughput.download.p75)}</td>
-                    </tr>
-                    <tr>
-                        <td>Upload</td>
-                        <td>${formatStatValue(throughput.upload.median)}</td>
-                        <td>${formatStatValue(throughput.upload.average)}</td>
-                        <td>${formatStatValue(throughput.upload.p75)}</td>
-                    </tr>
-                </tbody>
-            </table>
+            <div class="desktop-table">
+                <table class="stats-table">
+                    <thead>
+                        <tr>
+                            <th>Direction</th>
+                            <th>Median</th>
+                            <th class="hide-mobile-avg">Average</th>
+                            <th>75th %</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="direction-text">Download</span><span class="direction-arrow">⬇️</span></td>
+                            <td>${formatStatValue(throughput.download.median)}</td>
+                            <td class="hide-mobile-avg">${formatStatValue(throughput.download.average)}</td>
+                            <td>${formatStatValue(throughput.download.p75)}</td>
+                        </tr>
+                        <tr>
+                            <td><span class="direction-text">Upload</span><span class="direction-arrow">⬆️</span></td>
+                            <td>${formatStatValue(throughput.upload.median)}</td>
+                            <td class="hide-mobile-avg">${formatStatValue(throughput.upload.average)}</td>
+                            <td>${formatStatValue(throughput.upload.p75)}</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="mobile-stats-cards">
+                <div class="stat-card">
+                    <div class="stat-row">
+                        <span class="stat-label">⬇️ Download Median</span>
+                        <span class="stat-value">${formatStatValue(throughput.download.median)}</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-row">
+                        <span class="stat-label">⬇️ Download 75th %</span>
+                        <span class="stat-value">${formatStatValue(throughput.download.p75)}</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-row">
+                        <span class="stat-label">⬆️ Upload Median</span>
+                        <span class="stat-value">${formatStatValue(throughput.upload.median)}</span>
+                    </div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-row">
+                        <span class="stat-label">⬆️ Upload 75th %</span>
+                        <span class="stat-value">${formatStatValue(throughput.upload.p75)}</span>
+                    </div>
+                </div>
+            </div>
         </div>
     `;
 }
@@ -393,8 +494,8 @@ function getUserDisplayInfo(userId) {
             icon: '📺'
         },
         computer: {
-            name: 'Computer (Downloads)',
-            icon: '💻'
+            name: 'Computer (Game Updates)',
+            icon: '🖥️️️'
         }
     };
     
@@ -1106,6 +1207,16 @@ export function addResultsCSS() {
             line-height: 1.4;
         }
         
+        /* Direction indicators for mobile responsiveness */
+        .direction-text {
+            display: inline;
+        }
+        
+        .direction-arrow {
+            display: none;
+            font-size: 16px;
+        }
+        
         /* Responsive design for user statistics */
         @media (max-width: 768px) {
             .user-stats-tables {
@@ -1139,6 +1250,154 @@ export function addResultsCSS() {
             
             .user-grade-title {
                 font-size: 14px;
+            }
+            
+            /* Mobile-specific direction indicators */
+            .direction-text {
+                display: none;
+            }
+            
+            .direction-arrow {
+                display: inline;
+                font-size: 18px;
+            }
+            
+            /* Hide 25th percentile and average columns on mobile */
+            .hide-mobile-25th,
+            .hide-mobile-avg {
+                display: none;
+            }
+            
+            /* Desktop table vs mobile cards */
+            .desktop-table {
+                display: none;
+            }
+            
+            .mobile-stats-cards {
+                display: block;
+            }
+            
+            .network-metrics-container {
+                display: grid;
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+            
+            /* Mobile card styles */
+            .stat-card,
+            .network-metric-card {
+                background: rgba(255, 255, 255, 0.1);
+                border-radius: 8px;
+                padding: 12px;
+                margin-bottom: 8px;
+                border: 1px solid rgba(255, 255, 255, 0.2);
+            }
+            
+            .stat-row {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+            }
+            
+            .stat-label {
+                font-size: 14px;
+                color: rgba(255, 255, 255, 0.8);
+            }
+            
+            .stat-value {
+                font-size: 16px;
+                font-weight: 600;
+                color: #ffffff;
+            }
+            
+            /* Network metrics mobile styles */
+            .network-metric-card {
+                text-align: center;
+            }
+            
+            .metric-label {
+                font-size: 14px;
+                color: rgba(255, 255, 255, 0.8);
+                margin-bottom: 4px;
+            }
+            
+            .metric-value {
+                font-size: 18px;
+                font-weight: 600;
+                color: #ffffff;
+                margin-bottom: 4px;
+            }
+            
+            .metric-description {
+                font-size: 12px;
+                color: rgba(255, 255, 255, 0.6);
+            }
+            
+            /* Make tables more compact on mobile with optimized spacing */
+            .stats-table th,
+            .stats-table td {
+                padding: 8px 6px;
+                font-size: 13px;
+            }
+            
+            .stats-table th:first-child,
+            .stats-table td:first-child {
+                text-align: center;
+                width: 50px;
+                padding: 8px 4px;
+            }
+            
+            /* Optimize column widths for mobile */
+            #latencyStats th:nth-child(2),
+            #latencyStats td:nth-child(2),
+            #latencyStats th:nth-child(3),
+            #latencyStats td:nth-child(3) {
+                width: 20%;
+            }
+            
+            #latencyStats th:nth-child(4),
+            #latencyStats td:nth-child(4),
+            #latencyStats th:nth-child(5),
+            #latencyStats td:nth-child(5) {
+                width: 18%;
+            }
+            
+            #throughputStats th:nth-child(2),
+            #throughputStats td:nth-child(2),
+            #throughputStats th:nth-child(3),
+            #throughputStats td:nth-child(3),
+            #throughputStats th:nth-child(4),
+            #throughputStats td:nth-child(4) {
+                width: 25%;
+            }
+        }
+        
+        @media (min-width: 769px) {
+            .mobile-stats-cards,
+            .network-metrics-container {
+                display: none;
+            }
+            
+            .desktop-table {
+                display: block;
+            }
+        }
+        
+        /* Extra small screens */
+        @media (max-width: 480px) {
+            .stats-table th,
+            .stats-table td {
+                padding: 4px 2px;
+                font-size: 12px;
+            }
+            
+            .direction-arrow {
+                font-size: 16px;
+            }
+            
+            .stats-table th:first-child,
+            .stats-table td:first-child {
+                width: 35px;
             }
         }
     `;

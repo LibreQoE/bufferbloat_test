@@ -21,6 +21,19 @@ class ThroughputMonitor {
         this.cumulativeBytesSent = 0;
         this.testStartTime = 0;
         
+        // Enhanced cumulative tracking across phase transitions
+        this.sessionCumulativeDownload = 0;
+        this.sessionCumulativeUpload = 0;
+        this.phaseTransitionHistory = [];
+        
+        // Stream-level monitoring
+        this.streamLevelTracking = new Map();
+        this.lastStreamSnapshot = { download: new Map(), upload: new Map() };
+        
+        // Measurement window for resilient calculations
+        this.measurementWindow = [];
+        this.maxWindowSize = 10; // Keep last 10 measurements
+        
         // Smoothing factors
         this.downloadSmoothingFactor = 0.7; // Higher values = more smoothing (0-1)
         this.uploadSmoothingFactor = 0.8; // More aggressive smoothing for upload
@@ -28,6 +41,12 @@ class ThroughputMonitor {
         // Smoothed values
         this.smoothedDownloadThroughput = 0;
         this.smoothedUploadThroughput = 0;
+        
+        // Fallback measurement tracking
+        this.fallbackMeasurements = {
+            download: { lastValidMeasurement: 0, consecutiveFailures: 0 },
+            upload: { lastValidMeasurement: 0, consecutiveFailures: 0 }
+        };
     }
     
     /**
@@ -65,12 +84,26 @@ class ThroughputMonitor {
         this.smoothedDownloadThroughput = 0;
         this.smoothedUploadThroughput = 0;
         
+        // Enhanced reset - preserve session tracking
+        this.sessionCumulativeDownload = 0;
+        this.sessionCumulativeUpload = 0;
+        this.phaseTransitionHistory = [];
+        this.streamLevelTracking.clear();
+        this.lastStreamSnapshot = { download: new Map(), upload: new Map() };
+        this.measurementWindow = [];
+        
+        // Reset fallback tracking
+        this.fallbackMeasurements = {
+            download: { lastValidMeasurement: 0, consecutiveFailures: 0 },
+            upload: { lastValidMeasurement: 0, consecutiveFailures: 0 }
+        };
+        
         // 🔧 FIX: Track last reset time to coordinate with saturation.js
         this.lastResetTime = Date.now();
     }
     
     /**
-     * Measure throughput
+     * Measure throughput with enhanced resilience
      */
     measure() {
         const now = performance.now();
@@ -85,6 +118,28 @@ class ThroughputMonitor {
         
         // Calculate upload throughput
         const uploadThroughput = this.calculateUploadThroughput(timeDelta);
+        
+        // Create measurement record
+        const measurement = {
+            timestamp: now,
+            elapsedTime,
+            downloadThroughput,
+            uploadThroughput,
+            phase: currentPhase,
+            sessionDownloadBytes: this.sessionCumulativeDownload,
+            sessionUploadBytes: this.sessionCumulativeUpload,
+            activeStreams: {
+                download: StreamManager.streams.download.size,
+                upload: StreamManager.streams.upload.size
+            },
+            isValid: downloadThroughput > 0 || uploadThroughput > 0
+        };
+        
+        // Add to measurement window
+        this.measurementWindow.push(measurement);
+        if (this.measurementWindow.length > this.maxWindowSize) {
+            this.measurementWindow.shift();
+        }
         
         // Apply smoothing
         this.smoothedDownloadThroughput = this.applySmoothing(
@@ -103,26 +158,28 @@ class ThroughputMonitor {
         const isDownloadOutOfPhase = this.isTrafficOutOfPhase('download', currentPhase);
         const isUploadOutOfPhase = this.isTrafficOutOfPhase('upload', currentPhase);
         
-        // Store measurements
-        if (downloadThroughput > 0) {
-            this.downloadData.push({
-                time: elapsedTime,
-                value: downloadThroughput,
-                smoothedValue: this.smoothedDownloadThroughput,
-                phase: currentPhase,
-                isOutOfPhase: isDownloadOutOfPhase
-            });
-        }
+        // Store measurements - always store to maintain timeline continuity
+        this.downloadData.push({
+            time: elapsedTime,
+            value: downloadThroughput,
+            smoothedValue: this.smoothedDownloadThroughput,
+            phase: currentPhase,
+            isOutOfPhase: isDownloadOutOfPhase,
+            sessionBytes: this.sessionCumulativeDownload,
+            activeStreams: measurement.activeStreams.download,
+            isInterpolated: downloadThroughput === 0 && this.fallbackMeasurements.download.consecutiveFailures > 3
+        });
         
-        if (uploadThroughput > 0) {
-            this.uploadData.push({
-                time: elapsedTime,
-                value: uploadThroughput,
-                smoothedValue: this.smoothedUploadThroughput,
-                phase: currentPhase,
-                isOutOfPhase: isUploadOutOfPhase
-            });
-        }
+        this.uploadData.push({
+            time: elapsedTime,
+            value: uploadThroughput,
+            smoothedValue: this.smoothedUploadThroughput,
+            phase: currentPhase,
+            isOutOfPhase: isUploadOutOfPhase,
+            sessionBytes: this.sessionCumulativeUpload,
+            activeStreams: measurement.activeStreams.upload,
+            isInterpolated: uploadThroughput === 0 && this.fallbackMeasurements.upload.consecutiveFailures > 3
+        });
         
         // Update last measurement time
         this.lastMeasurementTime = now;
@@ -151,114 +208,165 @@ class ThroughputMonitor {
     }
     
     /**
-     * Calculate download throughput
+     * Calculate download throughput with enhanced tracking
      * @param {number} timeDelta - Time delta in seconds
      * @returns {number} Throughput in Mbps
      */
     calculateDownloadThroughput(timeDelta) {
-        // Calculate bytes received since last measurement
-        let bytesReceived = 0;
+        const currentPhase = window.currentTestPhase || 'unknown';
         
-        // Sum bytes received from all download streams
-        StreamManager.streams.download.forEach(stream => {
-            bytesReceived += stream.bytesReceived || 0;
+        // Stream-level monitoring for resilient tracking
+        const currentStreamSnapshot = new Map();
+        let totalBytesReceived = 0;
+        
+        // Collect current stream data
+        StreamManager.streams.download.forEach((stream, streamId) => {
+            const streamBytes = stream.bytesReceived || 0;
+            currentStreamSnapshot.set(streamId, streamBytes);
+            totalBytesReceived += streamBytes;
         });
         
-        // Calculate delta from last measurement
-        let bytesReceivedDelta = bytesReceived - this.cumulativeBytesReceived;
+        // Calculate delta using stream-level tracking
+        let bytesReceivedDelta = 0;
         
-        // 🔧 FIX: Handle byte counter resets (negative deltas) for download
-        if (bytesReceivedDelta < 0) {
-            console.warn(`🔧 DOWNLOAD BYTE COUNTER RESET DETECTED:`);
-            console.warn(`  Current bytesReceived: ${bytesReceived}`);
-            console.warn(`  Previous cumulativeBytesReceived: ${this.cumulativeBytesReceived}`);
-            console.warn(`  Negative delta: ${bytesReceivedDelta}`);
+        // For each active stream, calculate its contribution
+        currentStreamSnapshot.forEach((currentBytes, streamId) => {
+            const previousBytes = this.lastStreamSnapshot.download.get(streamId) || 0;
+            const streamDelta = Math.max(0, currentBytes - previousBytes);
+            bytesReceivedDelta += streamDelta;
             
-            // RESET FIX: Check if this is a legitimate reset (new test phase)
-            const currentPhase = window.currentTestPhase || 'unknown';
-            const isPhaseTransition = this.lastPhase && this.lastPhase !== currentPhase;
-            
-            if (isPhaseTransition) {
-                console.warn(`  Phase transition detected: ${this.lastPhase} → ${currentPhase}`);
-                console.warn(`  Resetting cumulative counter for new phase`);
-                this.cumulativeBytesReceived = 0;
-                bytesReceivedDelta = bytesReceived;
-            } else {
-                console.warn(`  Using current bytesReceived as delta to handle reset`);
-                bytesReceivedDelta = bytesReceived;
+            // Update stream tracking
+            if (!this.streamLevelTracking.has(streamId)) {
+                this.streamLevelTracking.set(streamId, {
+                    type: 'download',
+                    totalBytes: 0,
+                    createdAt: performance.now()
+                });
             }
+            this.streamLevelTracking.get(streamId).totalBytes += streamDelta;
+        });
+        
+        // Handle phase transitions gracefully
+        if (this.lastPhase && this.lastPhase !== currentPhase) {
+            logWithLevel('INFO', `📊 Phase transition: ${this.lastPhase} → ${currentPhase}`);
             
-            this.lastPhase = currentPhase;
-        } else {
-            // Track phase for reset detection
-            this.lastPhase = window.currentTestPhase || 'unknown';
+            // Record phase transition
+            this.phaseTransitionHistory.push({
+                fromPhase: this.lastPhase,
+                toPhase: currentPhase,
+                timestamp: performance.now(),
+                sessionDownloadBytes: this.sessionCumulativeDownload,
+                sessionUploadBytes: this.sessionCumulativeUpload
+            });
+            
+            // Don't reset counters - maintain continuity
+            logWithLevel('INFO', `📊 Maintaining continuous tracking across phase transition`);
         }
         
-        this.cumulativeBytesReceived = bytesReceived;
+        // Update session cumulative tracking
+        this.sessionCumulativeDownload += bytesReceivedDelta;
+        this.cumulativeBytesReceived = totalBytesReceived;
+        this.lastPhase = currentPhase;
         
-        // Calculate throughput in Mbps
-        // bytes to bits (x8) and then to Mbps (/1000000)
-        return (bytesReceivedDelta * 8) / (timeDelta * 1000000);
+        // Update stream snapshot
+        this.lastStreamSnapshot.download = new Map(currentStreamSnapshot);
+        
+        // Calculate throughput
+        const throughput = (bytesReceivedDelta * 8) / (timeDelta * 1000000);
+        
+        // Fallback measurement tracking
+        if (throughput > 0) {
+            this.fallbackMeasurements.download.lastValidMeasurement = throughput;
+            this.fallbackMeasurements.download.consecutiveFailures = 0;
+        } else {
+            this.fallbackMeasurements.download.consecutiveFailures++;
+            
+            // During severe bufferbloat, use last valid measurement with decay
+            if (this.fallbackMeasurements.download.consecutiveFailures > 3 && 
+                this.fallbackMeasurements.download.lastValidMeasurement > 0) {
+                const decayFactor = Math.max(0.1, 1 - (this.fallbackMeasurements.download.consecutiveFailures * 0.1));
+                return this.fallbackMeasurements.download.lastValidMeasurement * decayFactor;
+            }
+        }
+        
+        return throughput;
     }
     
     /**
-     * Calculate upload throughput
+     * Calculate upload throughput with enhanced tracking
      * @param {number} timeDelta - Time delta in seconds
      * @returns {number} Throughput in Mbps
      */
     calculateUploadThroughput(timeDelta) {
-        // Calculate bytes sent since last measurement
-        let bytesSent = 0;
+        const currentPhase = window.currentTestPhase || 'unknown';
+        
+        // Stream-level monitoring for resilient tracking
+        const currentStreamSnapshot = new Map();
+        let totalBytesSent = 0;
         let streamCount = 0;
         
-        // Sum bytes sent from all upload streams
-        StreamManager.streams.upload.forEach(stream => {
+        // Collect current stream data
+        StreamManager.streams.upload.forEach((stream, streamId) => {
             const streamBytes = stream.bytesSent || 0;
-            bytesSent += streamBytes;
+            currentStreamSnapshot.set(streamId, streamBytes);
+            totalBytesSent += streamBytes;
             streamCount++;
-            console.log(`Upload stream ${stream.id}: ${streamBytes} bytes sent`);
         });
         
-        // Calculate delta from last measurement
-        let bytesSentDelta = bytesSent - this.cumulativeBytesSent;
+        // Calculate delta using stream-level tracking
+        let bytesSentDelta = 0;
         
-        // 🔧 FIX: Handle byte counter resets (negative deltas)
-        if (bytesSentDelta < 0) {
-            console.warn(`🔧 UPLOAD BYTE COUNTER RESET DETECTED:`);
-            console.warn(`  Current bytesSent: ${bytesSent}`);
-            console.warn(`  Previous cumulativeBytesSent: ${this.cumulativeBytesSent}`);
-            console.warn(`  Negative delta: ${bytesSentDelta}`);
-            console.warn(`  Current phase: ${window.currentTestPhase}`);
-            console.warn(`  Active upload streams: ${streamCount}`);
+        // For each active stream, calculate its contribution
+        currentStreamSnapshot.forEach((currentBytes, streamId) => {
+            const previousBytes = this.lastStreamSnapshot.upload.get(streamId) || 0;
+            const streamDelta = Math.max(0, currentBytes - previousBytes);
+            bytesSentDelta += streamDelta;
             
-            // RESET FIX: Check if this is a legitimate reset (new test phase)
-            const currentPhase = window.currentTestPhase || 'unknown';
-            const isPhaseTransition = this.lastUploadPhase && this.lastUploadPhase !== currentPhase;
-            
-            if (isPhaseTransition) {
-                console.warn(`  Upload phase transition detected: ${this.lastUploadPhase} → ${currentPhase}`);
-                console.warn(`  Resetting cumulative upload counter for new phase`);
-                this.cumulativeBytesSent = 0;
-                bytesSentDelta = bytesSent;
-            } else {
-                console.warn(`  Using current bytesSent as delta to handle reset`);
-                bytesSentDelta = bytesSent;
+            // Update stream tracking
+            if (!this.streamLevelTracking.has(streamId)) {
+                this.streamLevelTracking.set(streamId, {
+                    type: 'upload',
+                    totalBytes: 0,
+                    createdAt: performance.now()
+                });
             }
-            
-            this.lastUploadPhase = currentPhase;
-        } else {
-            // Track phase for reset detection
-            this.lastUploadPhase = window.currentTestPhase || 'unknown';
+            this.streamLevelTracking.get(streamId).totalBytes += streamDelta;
+        });
+        
+        // Handle phase transitions gracefully
+        if (this.lastUploadPhase && this.lastUploadPhase !== currentPhase) {
+            logWithLevel('INFO', `📊 Upload phase transition: ${this.lastUploadPhase} → ${currentPhase}`);
+            // Don't reset counters - maintain continuity
         }
         
-        this.cumulativeBytesSent = bytesSent;
+        // Update session cumulative tracking
+        this.sessionCumulativeUpload += bytesSentDelta;
+        this.cumulativeBytesSent = totalBytesSent;
+        this.lastUploadPhase = currentPhase;
         
-        // Calculate throughput in Mbps
-        // bytes to bits (x8) and then to Mbps (/1000000)
+        // Update stream snapshot
+        this.lastStreamSnapshot.upload = new Map(currentStreamSnapshot);
+        
+        // Calculate throughput
         const throughput = (bytesSentDelta * 8) / (timeDelta * 1000000);
         
+        // Fallback measurement tracking
+        if (throughput > 0) {
+            this.fallbackMeasurements.upload.lastValidMeasurement = throughput;
+            this.fallbackMeasurements.upload.consecutiveFailures = 0;
+        } else {
+            this.fallbackMeasurements.upload.consecutiveFailures++;
+            
+            // During severe bufferbloat, use last valid measurement with decay
+            if (this.fallbackMeasurements.upload.consecutiveFailures > 3 && 
+                this.fallbackMeasurements.upload.lastValidMeasurement > 0) {
+                const decayFactor = Math.max(0.1, 1 - (this.fallbackMeasurements.upload.consecutiveFailures * 0.1));
+                return this.fallbackMeasurements.upload.lastValidMeasurement * decayFactor;
+            }
+        }
+        
         // Log detailed throughput calculation at DEBUG level
-        logWithLevel('DEBUG', `Upload throughput calculation: ${bytesSentDelta} bytes in ${timeDelta.toFixed(3)}s = ${throughput.toFixed(2)} Mbps (${streamCount} active streams)`);
+        logWithLevel('DEBUG', `Upload throughput: ${bytesSentDelta} bytes in ${timeDelta.toFixed(3)}s = ${throughput.toFixed(2)} Mbps (${streamCount} streams)`);
         
         return throughput;
     }

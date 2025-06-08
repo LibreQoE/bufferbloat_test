@@ -86,6 +86,21 @@ export function calculateTotalGrade(downloadGrade, uploadGrade, bidirectionalGra
 }
 
 /**
+ * Calculate the Total Grade from latency increases (Single User Mode)
+ * @param {number} downloadLatencyIncrease - Download latency increase in ms
+ * @param {number} uploadLatencyIncrease - Upload latency increase in ms
+ * @param {number} bidirectionalLatencyIncrease - Bidirectional latency increase in ms
+ * @returns {Object} Object containing total grade and CSS class
+ */
+export function calculateTotalGradeFromLatency(downloadLatencyIncrease, uploadLatencyIncrease, bidirectionalLatencyIncrease) {
+    // Calculate average latency increase across all three phases
+    const averageLatencyIncrease = (downloadLatencyIncrease + uploadLatencyIncrease + bidirectionalLatencyIncrease) / 3;
+    
+    // Use the standard latency increase to grade conversion
+    return determineGrade(averageLatencyIncrease);
+}
+
+/**
  * Convert letter grade to CSS class name
  * @param {string} grade - Letter grade (A+, A, B, C, D, F)
  * @returns {string} CSS class name

@@ -5,6 +5,7 @@
 
 import { generateTestData as xoshiroGenerateTestData, getPooledTestData, initializeDataPools } from './xoshiro.js';
 import { logWithLevel } from './config.js';
+import { getCurrentPhase } from './ui.js';
 
 /**
  * Create standardized headers for upload requests to ensure TCP connection reuse
@@ -40,6 +41,10 @@ class StreamManager {
     
     // Stream ID counter
     static nextStreamId = 1;
+    
+    // Enhanced monitoring for resilient throughput tracking
+    static streamMetrics = new Map();
+    static lastMetricsSnapshot = { download: new Map(), upload: new Map() };
     
     /**
      * Generate a unique stream ID
@@ -686,19 +691,27 @@ class StreamManager {
                 stream.dataChunks.push(chunk);
             }
         } else {
-            // For full test, use the optimal chunk size from adaptive warmup, not discovery phase
-            // This ensures we use the 2MB optimal size instead of the 128KB discovery fallback
-            let targetChunkSize = window.optimalUploadChunkSize ||
-                                  (window.adaptiveWarmupResults && window.adaptiveWarmupResults.optimalChunkSize) ||
-                                  finalUploadDiscoveryChunkSize;
+            // For full test, prioritize chunk size from stream options (simple warmup)
+            let targetChunkSize;
             
-            if (VERBOSE_LOGGING) {
-                const source = window.optimalUploadChunkSize ? "adaptive warmup" :
-                              (window.adaptiveWarmupResults?.optimalChunkSize ? "adaptive warmup results" : "discovery phase");
-                console.log(`🔧 CHUNK SIZE: Using ${Math.round(targetChunkSize/1024)}KB from ${source}`);
+            if (stream.options && stream.options.optimalChunkSize) {
+                // Use chunk size from simple warmup stored on stream
+                targetChunkSize = stream.options.optimalChunkSize;
+                console.log(`🔧 SIMPLE WARMUP: Using optimal chunk size from stream: ${Math.round(targetChunkSize/1024)}KB`);
+            } else if (window.optimalUploadChunkSize) {
+                // Fallback to global adaptive warmup chunk size
+                targetChunkSize = window.optimalUploadChunkSize;
+                console.log(`🔧 FALLBACK: Using global adaptive warmup chunk size: ${Math.round(targetChunkSize/1024)}KB`);
+            } else if (window.adaptiveWarmupResults && window.adaptiveWarmupResults.optimalChunkSize) {
+                // Fallback to adaptive warmup results
+                targetChunkSize = window.adaptiveWarmupResults.optimalChunkSize;
+                console.log(`🔧 FALLBACK: Using adaptive warmup results chunk size: ${Math.round(targetChunkSize/1024)}KB`);
+            } else {
+                // Final fallback
+                targetChunkSize = finalUploadDiscoveryChunkSize || 256 * 1024;
+                console.log(`🔧 DEFAULT: Using fallback chunk size: ${Math.round(targetChunkSize/1024)}KB`);
             }
             
-            // Adding more chunks using optimal chunk size
             console.log(`🔧 CHUNK SIZE: Adding ${count} chunks of ${Math.round(targetChunkSize/1024)}KB each for full test`);
             
             for (let i = 0; i < count; i++) {
@@ -849,10 +862,23 @@ class StreamManager {
             // Log the parameters in detail
             console.log(`Using upload parameters from warmup phase: streams=${streamCount}, pendingUploads=${pendingUploads}, uploadDelay=${uploadDelay}`);
             
-            // Determine if this is for bidirectional phase by comparing core properties
-            const isBidirectional = window.optimalUploadParams ?
-                !(params.streamCount === window.optimalUploadParams.streamCount &&
-                  params.pendingUploads === window.optimalUploadParams.pendingUploads) : true;
+            // Check if simple warmup provided a chunk size
+            if (params.chunkSize) {
+                console.log(`Simple warmup provided chunk size: ${Math.round(params.chunkSize/1024)}KB`);
+            }
+            
+            // Determine if this is for bidirectional phase by checking current test phase
+            // More reliable than parameter comparison since bidirectional uses same optimal parameters
+            let currentPhase;
+            try {
+                currentPhase = getCurrentPhase();
+            } catch (error) {
+                console.warn('Failed to get current phase:', error);
+                currentPhase = window.getCurrentPhase ? window.getCurrentPhase() : 'unknown';
+            }
+            const isBidirectional = currentPhase === 'bidirectional';
+            
+            console.log(`🔧 PHASE DEBUG: Current phase: ${currentPhase}`);
                   
             console.log(`🔧 UPLOAD DEBUG: Is this for bidirectional phase? ${isBidirectional ? 'Yes' : 'No'}`);
             console.log(`🔧 UPLOAD DEBUG: Optimal upload params: ${JSON.stringify(window.optimalUploadParams)}`);
@@ -898,28 +924,28 @@ class StreamManager {
                     dataChunks.push(chunk);
                 }
             } else {
-                // For full test, use the optimal chunk size from adaptive warmup, not discovery phase
-                // This ensures we use the 2MB optimal size instead of the 128KB discovery fallback
-                let targetChunkSize = finalUploadDiscoveryChunkSize;
+                // For full test, prioritize chunk size from simple warmup parameters
+                let targetChunkSize;
                 
-                // Check if adaptive warmup determined a better chunk size
-                if (window.optimalUploadChunkSize && window.optimalUploadChunkSize > targetChunkSize) {
+                if (params.chunkSize) {
+                    // Use chunk size from simple warmup
+                    targetChunkSize = params.chunkSize;
+                    console.log(`🔧 SIMPLE WARMUP: Using optimal chunk size from warmup: ${Math.round(targetChunkSize/1024)}KB`);
+                } else if (window.optimalUploadChunkSize) {
+                    // Fallback to adaptive warmup if available
                     targetChunkSize = window.optimalUploadChunkSize;
-                    if (VERBOSE_LOGGING) {
-                        console.log(`🔧 CHUNK SIZE FIX: Using adaptive warmup optimal chunk size: ${Math.round(targetChunkSize/1024)}KB instead of discovery ${Math.round(finalUploadDiscoveryChunkSize/1024)}KB`);
-                    }
-                } else if (window.adaptiveWarmupResults && window.adaptiveWarmupResults.optimalChunkSize && window.adaptiveWarmupResults.optimalChunkSize > targetChunkSize) {
+                    console.log(`🔧 FALLBACK: Using adaptive warmup chunk size: ${Math.round(targetChunkSize/1024)}KB`);
+                } else if (window.adaptiveWarmupResults && window.adaptiveWarmupResults.optimalChunkSize) {
+                    // Fallback to adaptive warmup results
                     targetChunkSize = window.adaptiveWarmupResults.optimalChunkSize;
-                    if (VERBOSE_LOGGING) {
-                        console.log(`🔧 CHUNK SIZE FIX: Using adaptive warmup results optimal chunk size: ${Math.round(targetChunkSize/1024)}KB instead of discovery ${Math.round(finalUploadDiscoveryChunkSize/1024)}KB`);
-                    }
-                } else if (VERBOSE_LOGGING) {
-                    console.log(`🔧 CHUNK SIZE DEBUG: window.optimalUploadChunkSize=${window.optimalUploadChunkSize}, targetChunkSize=${Math.round(targetChunkSize/1024)}KB, finalUploadDiscoveryChunkSize=${Math.round(finalUploadDiscoveryChunkSize/1024)}KB`);
+                    console.log(`🔧 FALLBACK: Using adaptive warmup results chunk size: ${Math.round(targetChunkSize/1024)}KB`);
+                } else {
+                    // Final fallback to discovery or default
+                    targetChunkSize = finalUploadDiscoveryChunkSize || 256 * 1024;
+                    console.log(`🔧 DEFAULT: Using fallback chunk size: ${Math.round(targetChunkSize/1024)}KB`);
                 }
                 
-                if (VERBOSE_LOGGING) {
-                    console.log(`🔧 CHUNK SIZE: Creating ${chunksPerStream} initial chunks of ${Math.round(targetChunkSize/1024)}KB each for full test`);
-                }
+                console.log(`🔧 CHUNK SIZE: Creating ${chunksPerStream} initial chunks of ${Math.round(targetChunkSize/1024)}KB each for full test`);
                 
                 for (let i = 0; i < chunksPerStream; i++) {
                     const chunk = this.generateUploadTestData(targetChunkSize);
@@ -928,13 +954,19 @@ class StreamManager {
             }
         }
         
+        // Store the target chunk size for use by addMoreUploadChunks
+        const finalTargetChunkSize = dataChunks.length > 0 && dataChunks[0] 
+            ? dataChunks[0].length 
+            : (params.chunkSize || window.optimalUploadChunkSize || 256 * 1024);
+        
         // Create specified number of upload streams
         const streamPromises = [];
         for (let i = 0; i < streamCount; i++) {
             const options = {
                 pendingUploads,
                 uploadDelay,
-                isDiscovery: isDiscovery  // Explicitly use the parameter value
+                isDiscovery: isDiscovery,  // Explicitly use the parameter value
+                optimalChunkSize: finalTargetChunkSize  // Store optimal chunk size for later use
             };
             
             // Clone data chunks for each stream
@@ -1076,5 +1108,6 @@ class StreamManager {
         console.log('StreamManager optimizations ready');
     }
 }
+
 
 export default StreamManager;

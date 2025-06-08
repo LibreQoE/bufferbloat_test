@@ -276,7 +276,7 @@ export function updateParameterOptimizationStatus(type, details = {}) {
     if (details.trial && details.totalTrials) {
         updateTestStatus(
             `⚙️ ${direction} Parameter Optimization`,
-            `Trial ${details.trial}/${details.totalTrials}: Testing ${details.config ? `${details.config.streamCount} streams` : 'configuration'}...`
+            `Trial ${details.trial}/${details.totalTrials}: Testing ${details.config ? (details.config.pendingUploads ? `${details.config.streamCount} streams, ${details.config.pendingUploads} pending` : `${details.config.streamCount} streams`) : 'configuration'}...`
         );
     } else if (details.speedTier) {
         updateTestStatus(
@@ -311,7 +311,7 @@ export function updateOptimizationCompleteStatus(type, details = {}) {
     const direction = type === 'download' ? 'Download' : 'Upload';
     updateTestStatus(
         `✅ ${direction} Optimization Complete`,
-        `Found optimal settings: ${details.finalConfig ? `${details.finalConfig.streamCount} streams` : 'parameters configured'}`
+        `Found optimal settings: ${details.finalConfig ? (details.finalConfig.pendingUploads ? `${details.finalConfig.streamCount} streams, ${details.finalConfig.pendingUploads} pending uploads` : `${details.finalConfig.streamCount} streams`) : 'parameters configured'}`
     );
 }
 

@@ -209,7 +209,7 @@ export function initDiscovery(type, baselineLatency) {
         console.error(`Parameter discovery for ${type} failed:`, error);
         // Return reasonable default parameters that work for all connection speeds
         const defaultParams = {
-            streamCount: type === 'upload' ? 2 : 3,
+            streamCount: type === 'upload' ? 3 : 3,
             pendingUploads: type === 'upload' ? 2 : 1,
             uploadDelay: 0
         };

@@ -1,0 +1,91 @@
+version: '3.8'
+
+services:
+  libreqos-bufferbloat:
+    build: 
+      context: .
+      dockerfile: Dockerfile
+    container_name: libreqos-bufferbloat
+    image: libreqos-bufferbloat:latest
+    ports:
+      # Main server (HTTP)
+      - "80:8000"
+      # HTTPS (optional)
+      - "443:443"
+      # Ping server
+      - "8085:8085"
+      # User process servers
+      - "8001:8001"
+      - "8002:8002"
+      - "8003:8003"
+      - "8004:8004"
+    volumes:
+      # Mount SSL certificates (optional)
+      - ./ssl:/app/ssl:ro
+      # Mount for development (optional)
+      # - ./client:/app/client:ro
+      # - ./server:/app/server:ro
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+    restart: unless-stopped
+    # Resource limits for better performance
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 15s
+      timeout: 10s
+      retries: 5
+      start_period: 45s
+    # Increase shared memory for WebRTC
+    shm_size: '256m'
+    # Add capabilities for network operations
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    networks:
+      - libreqos-net
+
+  # Optional: HTTPS with Let's Encrypt using Traefik
+  traefik:
+    image: traefik:v3.0
+    container_name: libreqos-traefik
+    profiles: ["https"]
+    command:
+      - "--api.insecure=false"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.letsencrypt.acme.email=your-email@example.com"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--global.checkNewVersion=false"
+      - "--global.sendAnonymousUsage=false"
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./letsencrypt:/letsencrypt
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - libreqos-net
+    restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
+    labels:
+      - "traefik.enable=false"
+
+networks:
+  libreqos-net:
+    driver: bridge

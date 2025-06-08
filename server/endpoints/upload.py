@@ -14,7 +14,7 @@ from fastapi.responses import JSONResponse
 
 # Constants for rate limiting and size control
 MAX_CHUNK_SIZE = 8 * 1024 * 1024  # Process in 8MB chunks max (optimized for ultra-high-speed)
-MAX_REQUEST_SIZE = 128 * 1024 * 1024  # 128MB max per request (increased for ultra-high-speed)
+MAX_REQUEST_SIZE = 512 * 1024 * 1024  # 512MB max per request (optimized for high-speed uploads)
 MAX_PROCESSING_RATE = 2000 * 1024 * 1024  # 2000MB/s max processing rate (16 Gbps)
 
 async def create_upload_endpoint(app, logger_prefix: str = "", traffic_pattern: str = "standard"):
@@ -51,56 +51,50 @@ async def create_upload_endpoint(app, logger_prefix: str = "", traffic_pattern: 
             
             if traffic_pattern == "background_batch":
                 # Computer's background pattern: larger files, lower priority
-                max_request_size = 128 * 1024 * 1024  # 128MB for background uploads
+                max_request_size = 512 * 1024 * 1024  # 512MB for background uploads (same as default)
                 max_processing_rate = 1000 * 1024 * 1024  # 1000MB/s (lower priority)
             elif traffic_pattern == "high_priority":
                 # High priority pattern: faster processing
                 max_processing_rate = 4000 * 1024 * 1024  # 4000MB/s (32 Gbps)
             
-            # Process chunks with rate limiting
+            # Process chunks with minimal memory usage - optimized for maximum throughput
             async for chunk in request.stream():
-                # Check total request size
-                size += len(chunk)
+                chunk_size = len(chunk)
+                size += chunk_size
                 chunk_count += 1
                 
                 if size > max_request_size:
                     logger.warning(f"{logger_prefix}Upload request too large: {size/1024/1024:.2f} MB exceeds limit of {max_request_size/1024/1024} MB")
                     raise HTTPException(status_code=413, detail="Request too large")
                 
-                # Process in smaller chunks to avoid memory issues
-                remaining = chunk
-                while remaining:
-                    # Process at most MAX_CHUNK_SIZE at once
-                    process_size = min(len(remaining), MAX_CHUNK_SIZE)
-                    current_chunk = remaining[:process_size]
-                    remaining = remaining[process_size:]
+                # Skip chunk processing entirely - just count bytes for maximum throughput
+                # No need to slice or copy chunk data, just discard immediately
+                bytes_since_check += chunk_size
+                # chunk is automatically garbage collected here
+                
+                # Rate monitoring (no throttling for gigabit+ connections)
+                current_time = asyncio.get_event_loop().time()
+                time_since_check = current_time - last_rate_check
+                
+                if time_since_check > 0.1:  # Check every 100ms
+                    current_rate = bytes_since_check / time_since_check
+                    current_rate_mbps = (current_rate * 8) / 1000000  # Convert to Mbps
                     
-                    # Count processed data
-                    bytes_since_check += process_size
+                    # 🚨 DIAGNOSTIC: Log high-speed upload rates for 500-2000 Mbps connections
+                    if current_rate_mbps > 400:  # Log rates above 400 Mbps
+                        logger.info(f"{logger_prefix}🚨 HIGH-SPEED UPLOAD: {current_rate_mbps:.2f} Mbps ({current_rate/1024/1024:.2f} MB/s)")
                     
-                    # Rate monitoring (no throttling for gigabit+ connections)
-                    current_time = asyncio.get_event_loop().time()
-                    time_since_check = current_time - last_rate_check
+                    # Only throttle if we're exceeding the very high limit (for server protection)
+                    if current_rate > max_processing_rate:
+                        delay_time = bytes_since_check / max_processing_rate - time_since_check
+                        if delay_time > 0:
+                            # Log if we're throttling at the extreme limit
+                            logger.warning(f"{logger_prefix}🚨 RATE LIMITING ACTIVE: {current_rate_mbps:.2f} Mbps exceeds {(max_processing_rate*8)/1000000:.0f} Mbps limit, adding {delay_time*1000:.1f}ms delay")
+                            await asyncio.sleep(delay_time)
                     
-                    if time_since_check > 0.1:  # Check every 100ms
-                        current_rate = bytes_since_check / time_since_check
-                        current_rate_mbps = (current_rate * 8) / 1000000  # Convert to Mbps
-                        
-                        # 🚨 DIAGNOSTIC: Log high-speed upload rates for 500-2000 Mbps connections
-                        if current_rate_mbps > 400:  # Log rates above 400 Mbps
-                            logger.info(f"{logger_prefix}🚨 HIGH-SPEED UPLOAD: {current_rate_mbps:.2f} Mbps ({current_rate/1024/1024:.2f} MB/s)")
-                        
-                        # Only throttle if we're exceeding the very high limit (for server protection)
-                        if current_rate > max_processing_rate:
-                            delay_time = bytes_since_check / max_processing_rate - time_since_check
-                            if delay_time > 0:
-                                # Log if we're throttling at the extreme limit
-                                logger.warning(f"{logger_prefix}🚨 RATE LIMITING ACTIVE: {current_rate_mbps:.2f} Mbps exceeds {(max_processing_rate*8)/1000000:.0f} Mbps limit, adding {delay_time*1000:.1f}ms delay")
-                                await asyncio.sleep(delay_time)
-                        
-                        # Reset rate monitoring counters
-                        bytes_since_check = 0
-                        last_rate_check = asyncio.get_event_loop().time()
+                    # Reset rate monitoring counters
+                    bytes_since_check = 0
+                    last_rate_check = asyncio.get_event_loop().time()
             
             # Calculate throughput for logging
             duration = asyncio.get_event_loop().time() - start_time

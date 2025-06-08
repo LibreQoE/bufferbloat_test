@@ -17,13 +17,7 @@ import {
 } from './throughputChart.js';
 import { analyzeAndDisplayResults } from './results.js';
 import { initUI, startTestUI, TEST_PHASES, getCurrentPhase, getElapsedTime } from './ui.js';
-import {
-    initDiscovery,
-    handleMeasurement,
-    isDiscoveryInProgress,
-    getBestParameters,
-    getParameterHistory
-} from './parameterDiscovery.js';
+import SimpleWarmup from './simpleWarmup.js';
 import {
     initTestStatusDisplay,
     initParameterVisualization,
@@ -313,8 +307,7 @@ function handleTestStart() {
     // Initialize and start the latency worker
     initLatencyWorker();
     
-    // Set up parameter visualization updates
-    setupParameterVisualizationUpdates();
+    // Simple warmup - no complex parameter visualization needed
     
     // Start with baseline phase
     phaseController.startPhase(TEST_PHASES.BASELINE);
@@ -353,41 +346,24 @@ async function handlePhaseChange(event) {
             break;
             
         case TEST_PHASES.DOWNLOAD_WARMUP:
-            updateTestStatus('🔥 Download Warmup', 'Starting download parameter discovery...');
-            console.log(`Starting download parameter discovery with aggressive initial parameters`);
+            updateTestStatus('🔥 Download Warmup', 'Smoothly saturating download with 3 fixed streams...');
+            console.log(`Starting simple download warmup with 3 fixed TCP streams`);
             
-            // Ensure any previous visualization is hidden first
+            // Hide complex parameter visualization
             hideParameterVisualization();
             
-            // Force a small delay before showing the visualization to ensure DOM is ready
-            setTimeout(() => {
-                // Show parameter visualization for download
-                console.log("Showing download parameter visualization");
-                updateParameterVisualization([], 'download');
-            }, 100);
+            // Run simple download warmup
+            const downloadWarmup = new SimpleWarmup('download', testData.baselineLatencyAvg, 10);
+            testData.optimalDownloadParams = await downloadWarmup.run();
             
-            // Start with more aggressive parameters for download warmup
-            const dlWarmupParams = { streamCount: 3 };
-            console.log(`Using aggressive initial download warmup parameters: ${JSON.stringify(dlWarmupParams)}`);
-            await StreamManager.startDownloadSaturation(true, 0, dlWarmupParams);
+            // Add a small delay to ensure all cleanup operations complete
+            await new Promise(resolve => setTimeout(resolve, 200));
             
-            // Always use adaptive warmup - legacy discovery system removed
-            console.log(`🎯 FORCED ADAPTIVE: Using adaptive warmup for download (legacy system removed)`);
-            
-            console.log(`🔧 DEBUG: About to call initDiscovery with adaptive warmup:`, {
-                direction: 'download',
-                baselineLatency: testData.baselineLatencyAvg,
-                useAdaptive: true
-            });
-            
-            testData.optimalDownloadParams = await initDiscovery('download', testData.baselineLatencyAvg);
             // Save a copy of the original optimal parameters
             testData.originalOptimalDownloadParams = { ...testData.optimalDownloadParams };
-            console.log(`Download parameter discovery complete. Optimal parameters:`, testData.optimalDownloadParams);
-            console.log(`Saved original optimal download parameters:`, testData.originalOptimalDownloadParams);
+            console.log(`Simple download warmup complete. Optimal parameters:`, testData.optimalDownloadParams);
+            console.log(`Peak throughput: ${testData.optimalDownloadParams.peakThroughput?.toFixed(2) || 0} Mbps`);
             
-            // Update visualization with final parameter history
-            updateParameterVisualization(getParameterHistory(), 'download');
             break;
             
         case TEST_PHASES.DOWNLOAD:
@@ -436,130 +412,71 @@ async function handlePhaseChange(event) {
             break;
             
         case TEST_PHASES.UPLOAD_WARMUP:
-            updateTestStatus('🔥 Upload Warmup', 'Starting upload parameter discovery...');
-            console.log(`Starting upload parameter discovery with adaptive warmup`);
+            updateTestStatus('🔥 Upload Warmup', 'Smoothly saturating upload with 3 fixed streams...');
+            console.log(`Starting simple upload warmup with 3 fixed TCP streams`);
             
-            // Ensure any previous visualization is hidden first
+            // Hide complex parameter visualization
             hideParameterVisualization();
             
-            // Force a small delay before showing the visualization to ensure DOM is ready
-            setTimeout(() => {
-                // Show parameter visualization for upload
-                console.log("Showing upload parameter visualization");
-                updateParameterVisualization([], 'upload');
-            }, 100);
-            
             // Add null value for download to break the line
-            // First add a null point at the end of the Download phase
             addNullDownloadDataPoint(throughputChart, elapsedTime);
             
-            // Always use adaptive warmup - legacy discovery system removed
-            console.log(`🎯 FORCED ADAPTIVE: Using adaptive warmup for upload (legacy system removed)`);
+            // Run simple upload warmup
+            const uploadWarmup = new SimpleWarmup('upload', testData.baselineLatencyAvg, 13);
+            testData.optimalUploadParams = await uploadWarmup.run();
             
-            console.log(`🔧 DEBUG: About to call initDiscovery with adaptive warmup:`, {
-                direction: 'upload',
-                baselineLatency: testData.baselineLatencyAvg,
-                useAdaptive: true
-            });
+            // Add a longer delay to ensure all cleanup operations complete and parameters are properly set
+            await new Promise(resolve => setTimeout(resolve, 1000));
             
-            // For adaptive warmup, run discovery first to get optimal parameters
-            console.log(`🚀 Starting adaptive warmup discovery to find optimal parameters`);
-            testData.optimalUploadParams = await initDiscovery('upload', testData.baselineLatencyAvg);
-            
-            // 🔧 FIX: Adaptive warmup discovery complete - now continue uploading with discovered parameters
-            console.log(`✅ Adaptive warmup discovery complete - discovered optimal parameters: ${JSON.stringify(testData.optimalUploadParams)}`);
-            
-            // Get the best parameters directly from the discovery module
-            const bestUploadWarmupParams = getBestParameters();
-            console.log(`Direct best parameters from discovery module:`, bestUploadWarmupParams);
-            
-            // Use the best parameters from the discovery module if available
-            if (bestUploadWarmupParams && bestUploadWarmupParams.streamCount && bestUploadWarmupParams.pendingUploads) {
-                testData.optimalUploadParams = { ...bestUploadWarmupParams };
-                console.log(`Using best parameters from discovery module:`, testData.optimalUploadParams);
+            // Explicit verification that parameters were set
+            if (!testData.optimalUploadParams) {
+                console.warn('⚠️ Race condition detected: Upload parameters still null after warmup');
+                // Wait a bit more and check again
+                await new Promise(resolve => setTimeout(resolve, 500));
+                if (!testData.optimalUploadParams) {
+                    console.error('❌ Upload warmup failed to set parameters, will use defaults');
+                }
             }
             
-            // Ensure we have valid parameters before saving a copy
+            // Log the final parameters for debugging
+            console.log(`🔧 FINAL CHECK: Upload parameters after warmup:`, testData.optimalUploadParams);
+            
+            // Ensure we have valid parameters
             if (testData.optimalUploadParams) {
                 // Save a copy of the original optimal parameters
                 testData.originalOptimalUploadParams = { ...testData.optimalUploadParams };
-                console.log(`Upload parameter discovery complete. Optimal parameters:`, testData.optimalUploadParams);
-                console.log(`Saved original optimal upload parameters:`, testData.originalOptimalUploadParams);
+                console.log(`Simple upload warmup complete. Optimal parameters:`, testData.optimalUploadParams);
+                console.log(`Peak throughput: ${testData.optimalUploadParams.peakThroughput?.toFixed(2) || 0} Mbps`);
             } else {
-                // Create default parameters if none were discovered
-                testData.optimalUploadParams = { streamCount: 2, pendingUploads: 2, uploadDelay: 0 };
+                // Create default parameters if warmup failed
+                testData.optimalUploadParams = { streamCount: 3, pendingUploads: 4, uploadDelay: 0, chunkSize: 256 * 1024 };
                 testData.originalOptimalUploadParams = { ...testData.optimalUploadParams };
-                console.log(`No upload parameters discovered, using defaults:`, testData.optimalUploadParams);
-                console.log(`Saved default upload parameters as original:`, testData.originalOptimalUploadParams);
+                console.log(`Upload warmup failed, using defaults:`, testData.optimalUploadParams);
             }
             
-            // Log the parameters in detail
-            console.log(`UPLOAD WARMUP PHASE: Discovered optimal parameters:`);
-            console.log(`  - Stream count: ${testData.optimalUploadParams.streamCount}`);
-            console.log(`  - Pending uploads: ${testData.optimalUploadParams.pendingUploads}`);
-            console.log(`  - Upload delay: ${testData.optimalUploadParams.uploadDelay || 0}`);
-            
-            // Update visualization with final parameter history
-            updateParameterVisualization(getParameterHistory(), 'upload');
-            
-            // 🔧 CRITICAL FIX: Continue uploading with discovered parameters for remainder of warmup phase
-            console.log(`🚀 WARMUP CONTINUATION: Starting upload streams with discovered parameters for remainder of warmup phase`);
-            
-            // Prepare parameters for warmup continuation
-            const warmupContinuationParams = {
-                streamCount: testData.optimalUploadParams.streamCount,
-                pendingUploads: testData.optimalUploadParams.pendingUploads,
-                uploadDelay: 0, // No delay for warmup continuation
-                isWarmupContinuation: true // Flag to indicate this is warmup continuation, not discovery
-            };
-            
-            console.log(`🚀 Starting upload warmup continuation with parameters: ${JSON.stringify(warmupContinuationParams)}`);
-            
-            // Start upload streams with discovered parameters for the remainder of the warmup phase
-            await StreamManager.startUploadSaturation(true, 0, warmupContinuationParams);
             break;
             
         case TEST_PHASES.UPLOAD:
             updateTestStatus('📏 Upload Measurement', 'Measuring upload performance under load...');
             console.log(`Using discovered optimal upload parameters: ${JSON.stringify(testData.optimalUploadParams)}`);
             
-            // Double-check with the discovery module for the best parameters
-            const bestUploadParams = getBestParameters();
-            console.log(`Direct best parameters from discovery module for upload phase:`, bestUploadParams);
-            
-            // Keep upload parameter visualization visible after warmup
-            // (removed hideParameterVisualization call)
-            
             // Add null value for upload to break the line between Upload Warmup and Upload phases
             addNullUploadDataPoint(throughputChart, elapsedTime);
             
-            // Use default parameters if none were discovered
+            // Use the parameters discovered during simple warmup
             let uploadParams;
-            if (!testData.optimalUploadParams && !bestUploadParams) {
-                // If no parameters were discovered, use moderate defaults
-                uploadParams = { streamCount: 1, pendingUploads: 4, uploadDelay: 0 };
-                console.log(`No upload parameters discovered, using moderate defaults: ${JSON.stringify(uploadParams)}`);
-            } else {
-                // Prioritize parameters from the discovery module if available
-                const sourceParams = bestUploadParams || testData.optimalUploadParams;
-                console.log(`Using parameters source:`, sourceParams);
-                
-                // Use the parameters discovered during warmup phase - create a deep copy
+            if (testData.optimalUploadParams) {
                 uploadParams = {
-                    // Use the actual values from sourceParams, not fallbacks
-                    streamCount: sourceParams.streamCount !== undefined ?
-                        sourceParams.streamCount : 1,
-                    pendingUploads: sourceParams.pendingUploads !== undefined ?
-                        sourceParams.pendingUploads : 4,
+                    streamCount: testData.optimalUploadParams.streamCount || 3,
+                    pendingUploads: testData.optimalUploadParams.pendingUploads || 4,
+                    chunkSize: testData.optimalUploadParams.chunkSize || 256 * 1024,
                     uploadDelay: 0 // No delay for full test
                 };
-                console.log(`Using discovered upload parameters: ${JSON.stringify(uploadParams)}`);
-                
-                // Log the parameters in detail
-                console.log(`UPLOAD PHASE: Using parameters:`);
-                console.log(`  - Stream count: ${uploadParams.streamCount}`);
-                console.log(`  - Pending uploads: ${uploadParams.pendingUploads}`);
-                console.log(`  - Upload delay: ${uploadParams.uploadDelay || 0}`);
+                console.log(`Using simple warmup parameters: ${JSON.stringify(uploadParams)}`);
+            } else {
+                // Fallback if warmup failed
+                uploadParams = { streamCount: 3, pendingUploads: 4, uploadDelay: 0, chunkSize: 256 * 1024 };
+                console.log(`No upload parameters from warmup, using defaults: ${JSON.stringify(uploadParams)}`);
             }
             
             console.log(`Upload parameters being used: ${JSON.stringify(uploadParams)}`);
@@ -592,9 +509,7 @@ async function handlePhaseChange(event) {
             updateTestStatus('🔄 Bidirectional Test', 'Testing download and upload simultaneously...');
             console.log(`Using discovered optimal parameters for bidirectional test`);
             
-            // Double-check with the discovery module for the best parameters
-            const bestBiParams = getBestParameters();
-            console.log(`Direct best parameters from discovery module for bidirectional phase:`, bestBiParams);
+            // Use parameters from simple warmup phases
             
             // Add null values to break the lines
             // This will create a clean break between Upload and Bidirectional phases
@@ -638,21 +553,8 @@ async function handlePhaseChange(event) {
                 console.log(`No download parameters found, using defaults for bidirectional test: ${JSON.stringify(biDlParams)}`);
             }
             
-            // For upload parameters - prioritize best parameters from discovery module
-            if (bestBiParams && bestBiParams.streamCount && bestBiParams.pendingUploads) {
-                // Use the best parameters from the discovery module WITHOUT MODIFICATION
-                biUlParams = { ...bestBiParams };
-                console.log(`Using exact best parameters from discovery module for bidirectional test: ${JSON.stringify(biUlParams)}`);
-                
-                // Ensure we have valid values for required parameters
-                if (biUlParams.streamCount === undefined || biUlParams.pendingUploads === undefined) {
-                    console.log(`Best parameters missing required fields, adding defaults`);
-                    biUlParams.streamCount = biUlParams.streamCount || 1;
-                    biUlParams.pendingUploads = biUlParams.pendingUploads || 4;
-                    biUlParams.uploadDelay = biUlParams.uploadDelay || 0;
-                    console.log(`Updated upload parameters: ${JSON.stringify(biUlParams)}`);
-                }
-            } else if (testData.originalOptimalUploadParams) {
+            // For upload parameters - use simple warmup results
+            if (testData.originalOptimalUploadParams) {
                 // Use the original optimal parameters from warmup phase WITHOUT MODIFICATION
                 biUlParams = { ...testData.originalOptimalUploadParams };
                 // Keep all original properties including uploadDelay
@@ -670,7 +572,7 @@ async function handlePhaseChange(event) {
                 // Fall back to current optimalUploadParams if original not available
                 biUlParams = {
                     streamCount: testData.optimalUploadParams.streamCount !== undefined ?
-                        testData.optimalUploadParams.streamCount : 1,
+                        testData.optimalUploadParams.streamCount : 3,
                     pendingUploads: testData.optimalUploadParams.pendingUploads !== undefined ?
                         testData.optimalUploadParams.pendingUploads : 4,
                     uploadDelay: 0 // No delay for bidirectional test
@@ -681,7 +583,7 @@ async function handlePhaseChange(event) {
                 console.log(`Using global upload parameters for bidirectional test: ${JSON.stringify(biUlParams)}`);
             } else {
                 // Default fallback
-                biUlParams = { streamCount: 1, pendingUploads: 4, uploadDelay: 0 };
+                biUlParams = { streamCount: 3, pendingUploads: 4, uploadDelay: 0 };
                 console.log(`No upload parameters found, using defaults for bidirectional test: ${JSON.stringify(biUlParams)}`);
             }
             
@@ -857,61 +759,7 @@ async function handleTestComplete() {
     analyzeAndDisplayResults(testData);
 }
 
-/**
- * Set up periodic updates for parameter visualization during discovery
- */
-function setupParameterVisualizationUpdates() {
-    console.log("Setting up parameter visualization updates");
-    
-    // Update visualization more frequently (every 300ms) during discovery
-    const updateInterval = setInterval(() => {
-        const currentPhase = getCurrentPhase();
-        const history = getParameterHistory();
-        
-        if (currentPhase === TEST_PHASES.DOWNLOAD_WARMUP) {
-            logWithLevel('DEBUG', "Updating download parameter visualization");
-            updateParameterVisualization(history, 'download');
-        } else if (currentPhase === TEST_PHASES.UPLOAD_WARMUP) {
-            logWithLevel('DEBUG', "Updating upload parameter visualization");
-            updateParameterVisualization(history, 'upload');
-        }
-    }, 300);
-    
-    // Set up phase change listener to ensure visualization is shown/hidden appropriately
-    window.addEventListener('test:phaseChange', (event) => {
-        const phase = event.detail.phase;
-        
-        if (phase === TEST_PHASES.DOWNLOAD_WARMUP) {
-            // Ensure visualization is shown at the start of download warmup
-            setTimeout(() => {
-                console.log("Phase change to download warmup - showing visualization");
-                updateParameterVisualization(getParameterHistory(), 'download');
-            }, 100);
-        } else if (phase === TEST_PHASES.UPLOAD_WARMUP) {
-            // Ensure visualization is shown at the start of upload warmup
-            setTimeout(() => {
-                console.log("Phase change to upload warmup - showing visualization");
-                updateParameterVisualization(getParameterHistory(), 'upload');
-            }, 100);
-        } else if (phase === TEST_PHASES.DOWNLOAD) {
-            // Keep download visualization visible when moving to download saturation phase
-            console.log("Phase change to download saturation phase - keeping download visualization visible");
-            // (removed hideParameterVisualization call)
-        } else if (phase === TEST_PHASES.UPLOAD) {
-            // Keep upload visualization visible when moving to upload saturation phase
-            console.log("Phase change to upload saturation phase - keeping upload visualization visible");
-            // (removed hideParameterVisualization call)
-        }
-    });
-    
-    // Clear interval on test complete
-    window.addEventListener('test:complete', () => {
-        console.log("Test complete - cleaning up visualization updates");
-        clearInterval(updateInterval);
-        // Keep visualizations visible after test completes
-        // (removed hideParameterVisualization call)
-    }, { once: true });
-}
+// Removed complex parameter visualization - using simple warmup instead
 
 /**
  * Handle download throughput event
@@ -923,36 +771,13 @@ function handleDownloadThroughput(event) {
     const elapsedTime = event.detail.time;
     const phase = event.detail.phase;
     const isOutOfPhase = event.detail.isOutOfPhase;
+    const isSpeedEstimation = event.detail.isSpeedEstimation;
     
     // Store throughput data by phase
     if (phase === TEST_PHASES.DOWNLOAD_WARMUP) {
         testData.downloadThroughput.discovery.push(throughput);
         
-        // If parameter discovery is in progress, send measurement
-        if (isDiscoveryInProgress()) {
-            // Get latest latency measurement
-            let latency = testData.downloadDiscoveryLatency.length > 0 ?
-                testData.downloadDiscoveryLatency[testData.downloadDiscoveryLatency.length - 1] :
-                testData.baselineLatencyAvg;
-                
-            // 🔧 FIX: Ensure latency is finite and reasonable
-            if (!isFinite(latency) || latency <= 0) {
-                console.warn(`🔧 Invalid download latency detected: ${latency}, using baseline average: ${testData.baselineLatencyAvg}`);
-                latency = testData.baselineLatencyAvg || 20; // Fallback to 20ms
-            }
-                
-            // 🔧 FIX: Ensure throughput is finite and reasonable
-            if (!isFinite(throughput) || throughput < 0) {
-                console.warn(`🔧 Invalid download throughput detected: ${throughput}, skipping measurement`);
-                return; // Skip this measurement
-            }
-            
-            // Send measurement to parameter discovery module
-            handleMeasurement({
-                throughput: throughput,
-                latency: latency
-            });
-        }
+        // Simple warmup - no complex parameter discovery needed
     } else if (phase === TEST_PHASES.DOWNLOAD) {
         testData.downloadThroughput.download.push(throughput);
         // Update status with current throughput
@@ -979,36 +804,13 @@ function handleUploadThroughput(event) {
     const elapsedTime = event.detail.time;
     const phase = event.detail.phase;
     const isOutOfPhase = event.detail.isOutOfPhase;
+    const isSpeedEstimation = event.detail.isSpeedEstimation;
     
     // Store throughput data by phase
     if (phase === TEST_PHASES.UPLOAD_WARMUP) {
         testData.uploadThroughput.discovery.push(throughput);
         
-        // If parameter discovery is in progress, send measurement
-        if (isDiscoveryInProgress()) {
-            // Get latest latency measurement
-            let latency = testData.uploadDiscoveryLatency.length > 0 ?
-                testData.uploadDiscoveryLatency[testData.uploadDiscoveryLatency.length - 1] :
-                testData.baselineLatencyAvg;
-                
-            // 🔧 FIX: Ensure latency is finite and reasonable
-            if (!isFinite(latency) || latency <= 0) {
-                console.warn(`🔧 Invalid upload latency detected: ${latency}, using baseline average: ${testData.baselineLatencyAvg}`);
-                latency = testData.baselineLatencyAvg || 20; // Fallback to 20ms
-            }
-                
-            // 🔧 FIX: Ensure throughput is finite and reasonable
-            if (!isFinite(throughput) || throughput < 0) {
-                console.warn(`🔧 Invalid upload throughput detected: ${throughput}, skipping measurement`);
-                return; // Skip this measurement
-            }
-            
-            // Send measurement to parameter discovery module
-            handleMeasurement({
-                throughput: throughput,
-                latency: latency
-            });
-        }
+        // Simple warmup - no complex parameter discovery needed
     } else if (phase === TEST_PHASES.UPLOAD) {
         testData.uploadThroughput.upload.push(throughput);
         // Update status with current throughput
@@ -1020,9 +822,13 @@ function handleUploadThroughput(event) {
     }
     
     // Add data point to throughput chart for all phases except baseline and download phases
+    // Exception: Include upload warmup if it's speed estimation phase
     if (phase !== TEST_PHASES.BASELINE &&
         phase !== TEST_PHASES.DOWNLOAD_WARMUP &&
         phase !== TEST_PHASES.DOWNLOAD) {
+        addUploadThroughputDataPoint(throughputChart, elapsedTime, throughput, isOutOfPhase);
+    } else if (phase === TEST_PHASES.UPLOAD_WARMUP && isSpeedEstimation) {
+        // Plot speed estimation phase for upload warmup
         addUploadThroughputDataPoint(throughputChart, elapsedTime, throughput, isOutOfPhase);
     }
 }
@@ -1054,8 +860,11 @@ function handleLatencyWorkerMessage(event) {
             processLatencyMeasurement(data.rtt, false);
             break;
         case 'timeout':
-            // Log timeout but don't add artificial data to measurements
+            // Log timeout and treat as high latency measurement for accurate scoring
             console.warn(`Latency measurement timeout: ${data.message} (consecutive: ${data.consecutiveTimeouts})`);
+            // For bufferbloat testing, timeouts indicate severe congestion and should be treated as very high latency
+            // Use 1000ms as timeout latency value (represents severe bufferbloat)
+            processLatencyMeasurement(1000, true);
             break;
         case 'error':
             console.error('Latency worker error:', data.error);
@@ -1134,6 +943,15 @@ function processLatencyMeasurement(latency, isTimeout = false) {
                 }));
                 
                 // Reset counter
+                window.consecutiveTimeouts = 0;
+            }
+        } else if (currentPhase === TEST_PHASES.BIDIRECTIONAL) {
+            // For bidirectional phase, DO NOT adjust parameters at all
+            // The bidirectional phase should use the optimal parameters discovered during warmup
+            // and maintain them throughout, regardless of timeouts
+            if (window.consecutiveTimeouts >= 15) {
+                console.log(`📊 BIDIRECTIONAL: ${window.consecutiveTimeouts} consecutive timeouts detected, but maintaining optimal parameters (no backoff)`);
+                // Reset counter to prevent excessive logging, but don't dispatch backoff events
                 window.consecutiveTimeouts = 0;
             }
         } else {
@@ -1328,10 +1146,23 @@ function switchToSingleUserMode() {
         uiHousehold.hide();
     }
     
+    // Hide Virtual Household results when switching to Single User mode
+    const householdResults = document.getElementById('householdResults');
+    if (householdResults) {
+        householdResults.classList.add('hidden');
+    }
+    
+    // Single User results container should remain as-is to preserve any existing results
+    const singleUserResults = document.getElementById('results');
+    if (singleUserResults) {
+        // Only hide it initially, don't clear the content
+        singleUserResults.classList.add('hidden');
+    }
+    
     // Update display
     updateModeDisplay();
     
-    console.log('✅ Switched to Single User Test mode');
+    console.log('✅ Switched to Single User Test mode and preserved existing results');
 }
 
 /**
@@ -1353,6 +1184,19 @@ function switchToHouseholdMode() {
     // Stop all streams
     StreamManager.terminateAllStreams();
     
+    // Hide Single User results when switching to Virtual Household mode
+    const singleUserResults = document.getElementById('results');
+    if (singleUserResults) {
+        singleUserResults.classList.add('hidden');
+    }
+    
+    // Virtual Household results container should remain as-is to preserve any existing results
+    const householdResults = document.getElementById('householdResults');
+    if (householdResults) {
+        // Only hide it initially, don't clear the content
+        householdResults.classList.add('hidden');
+    }
+    
     // Show household UI
     if (uiHousehold) {
         uiHousehold.show();
@@ -1361,7 +1205,31 @@ function switchToHouseholdMode() {
     // Update display
     updateModeDisplay();
     
-    console.log('✅ Switched to Virtual Household Mode');
+    console.log('✅ Switched to Virtual Household Mode and preserved existing results');
+}
+
+/**
+ * Check if a results container has valid results (not just placeholder content)
+ * @param {HTMLElement} container - The results container to check
+ * @returns {boolean} True if the container has valid results
+ */
+function hasValidResults(container) {
+    if (!container || !container.innerHTML.trim()) {
+        return false;
+    }
+    
+    // Check for signs of actual test results vs placeholder content
+    const hasGradeValues = container.querySelector('.total-grade') && 
+                          container.querySelector('.total-grade').textContent.trim() !== '';
+    
+    const hasStats = container.querySelector('.stats-table tbody tr') && 
+                     !container.innerHTML.includes('<!-- Filled by JavaScript -->');
+    
+    const hasUserResults = container.querySelector('.user-result-grade') && 
+                          container.querySelector('.user-result-grade').textContent.trim() !== '';
+    
+    // Return true if we have either Single User results or Virtual Household results
+    return hasGradeValues || hasStats || hasUserResults;
 }
 
 /**
@@ -1373,6 +1241,10 @@ function updateModeDisplay() {
     const testContainer = document.querySelector('.test-container');
     const householdContainer = document.getElementById('householdContainer');
     const headerDescription = document.getElementById('headerDescription');
+    
+    // Get results containers
+    const singleUserResults = document.getElementById('results');
+    const householdResults = document.getElementById('householdResults');
     
     if (!singleUserMode || !householdMode || !testContainer || !householdContainer) {
         return;
@@ -1387,12 +1259,19 @@ function updateModeDisplay() {
         testContainer.style.display = 'block';
         householdContainer.classList.add('hidden');
         
+        // Show Single User results if they exist, hide Virtual Household results
+        if (singleUserResults && hasValidResults(singleUserResults)) {
+            singleUserResults.classList.remove('hidden');
+            singleUserResults.style.display = 'block';
+        }
+        if (householdResults) {
+            householdResults.classList.add('hidden');
+        }
+        
         // Update header description
         if (headerDescription) {
             headerDescription.textContent = "Measure your connection's latency under load";
         }
-        
-        // No body class needed - using same container width
         
     } else if (currentMode === 'household') {
         // Update mode toggle appearance
@@ -1403,12 +1282,19 @@ function updateModeDisplay() {
         testContainer.style.display = 'none';
         householdContainer.classList.remove('hidden');
         
+        // Show Virtual Household results if they exist, hide Single User results
+        if (householdResults && hasValidResults(householdResults)) {
+            householdResults.classList.remove('hidden');
+            householdResults.style.display = 'block';
+        }
+        if (singleUserResults) {
+            singleUserResults.classList.add('hidden');
+        }
+        
         // Update header description
         if (headerDescription) {
             headerDescription.textContent = "Simulate realistic multi-user home internet conditions";
         }
-        
-        // No body class needed - using same container width as Single User Test
     }
 }
 

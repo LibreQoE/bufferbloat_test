@@ -1,0 +1,68 @@
+version: '3.8'
+
+# Development overrides for LibreQoS Bufferbloat Test
+services:
+  libreqos-bufferbloat:
+    # Development build configuration
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    # Development volumes for hot reloading
+    volumes:
+      - ./client:/app/client:ro
+      - ./server:/app/server:ro
+      - ./ssl:/app/ssl:ro
+    # Development environment variables
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - DEBUG=1
+      - FLASK_ENV=development
+    # Development ports (expose additional debugging ports)
+    ports:
+      - "80:8000"
+      - "443:443"
+      - "8085:8085"
+      - "8001:8001"
+      - "8002:8002"
+      - "8003:8003"
+      - "8004:8004"
+      # Debug port
+      - "5678:5678"
+    # Development logging (more verbose)
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "50m"
+        max-file: "5"
+    # Relaxed resource limits for development
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+          cpus: '2.0'
+    # Development labels
+    labels:
+      - "com.libreqos.environment=development"
+      - "traefik.enable=false"
+
+  # Development database for testing (optional)
+  redis:
+    image: redis:7-alpine
+    container_name: libreqos-redis-dev
+    profiles: ["dev-cache"]
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-dev-data:/data
+    networks:
+      - libreqos-net
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+
+volumes:
+  redis-dev-data:
+    driver: local

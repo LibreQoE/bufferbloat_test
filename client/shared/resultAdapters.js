@@ -228,8 +228,9 @@ class SingleUserAdapter {
             <!-- Total Grade Explanation -->
             <div class="total-grade-explanation-section">
                 <h4>Total Grade Calculation</h4>
-                <p>Your <strong>Total Bufferbloat Grade</strong> combines all three test phases with equal weighting (33.33% each). Each letter grade is converted to a numeric value (A+=6, A=5, B=4, C=3, D=2, F=1), averaged, then converted back to a letter grade.</p>
-                <p><strong>Example:</strong> If you get A+ (6), B (4), and A (5), your total = (6+4+5)/3 = 5.0 = A grade overall.</p>
+                <p>Your <strong>Total Bufferbloat Grade</strong> is based on the average latency increase across all three test phases. We calculate the average of the latency increases in milliseconds, then convert that average to a letter grade using our standard grading scale.</p>
+                <p><strong>Formula:</strong> (Download Latency Increase + Upload Latency Increase + Bidirectional Latency Increase) ÷ 3 = Average Latency Increase</p>
+                <p><strong>Example:</strong> If you have latency increases of 15ms (Download), 25ms (Upload), and 35ms (Bidirectional), your average = (15+25+35)/3 = 25ms = A grade overall.</p>
             </div>
             
             <!-- Individual Grades Explanation -->
@@ -505,24 +506,15 @@ class VirtualHouseholdAdapter {
                 <div class="calculation-details">
                     <p><strong>Weighting Formula:</strong></p>
                     <ul>
-                        <li><strong>Network Fairness (40%):</strong> How evenly bandwidth is distributed among users</li>
-                        <li><strong>Latency Stability (30%):</strong> How consistent response times remain under load</li>
-                        <li><strong>Individual User Performance (30%):</strong> Average of all four virtual users' individual grades</li>
+                        <li><strong>Latency Stability (90%):</strong> How consistent response times remain under load</li>
+                        <li><strong>Network Fairness (10%):</strong> How evenly bandwidth is distributed among users</li>
                     </ul>
                     <p><strong>Calculation Steps:</strong></p>
                     <ul>
                         <li>1. Calculate Network Fairness percentage using Jain's Fairness Index</li>
                         <li>2. Calculate Latency Stability percentage using coefficient of variation</li>
-                        <li>3. Calculate individual user grades based on their specific requirements:
-                            <ul style="margin-top: 8px;">
-                                <li><strong>Alex (Gaming):</strong> Prioritizes low latency and jitter (&lt;50ms ping, &lt;10ms jitter = A+)</li>
-                                <li><strong>Sarah (Video Calls):</strong> Needs stable bandwidth and low jitter (2.5+ Mbps, &lt;20ms jitter = A+)</li>
-                                <li><strong>Jake (Streaming):</strong> Requires consistent high throughput (25+ Mbps sustained = A+)</li>
-                                <li><strong>Computer (Downloads):</strong> Tolerates higher latency but needs fair bandwidth allocation</li>
-                            </ul>
-                        </li>
-                        <li>4. Combine using weighted formula: Overall = (Fairness × 0.4) + (Stability × 0.3) + (User Average × 0.3)</li>
-                        <li>5. Convert final percentage to letter grade using standard scale</li>
+                        <li>3. Combine using weighted formula: Overall = (Stability × 0.9) + (Fairness × 0.1)</li>
+                        <li>4. Convert final percentage to letter grade using standard scale</li>
                     </ul>
                 </div>
             </div>
@@ -718,8 +710,8 @@ class VirtualHouseholdAdapter {
                 color: '#45b7d1'
             },
             computer: {
-                name: 'Computer (Downloads)',
-                icon: '💻',
+                name: 'Computer (Game Updates)',
+                icon: '🎮',
                 color: '#45b7d1'
             }
         };

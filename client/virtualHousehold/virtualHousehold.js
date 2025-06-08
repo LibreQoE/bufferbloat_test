@@ -164,11 +164,11 @@ class VirtualHousehold {
             },
             computer: {
                 name: 'Computer',
-                familyName: 'Computer (Updates)',
-                icon: '💻',
-                activityIcon: '☁️',
+                familyName: 'Computer (Game Updates)',
+                icon: '🎮',
+                activityIcon: '🎮',
                 description: 'Continuous high-speed downloads',
-                activity: 'High-Speed Downloads',
+                activity: 'Game Updates',
                 color: '#45b7d1',
                 targetDownload: 200.0, // Mbps - continuous high-speed download
                 targetUpload: 0.1,    // Mbps - minimal upload (100 Kbps)
@@ -2417,7 +2417,7 @@ class VirtualHousehold {
     }
     
     calculateOverallGrade() {
-        // Calculate overall grade based ONLY on Network Fairness and Latency Stability
+        // Calculate overall grade with 90% Latency Stability, 10% Network Fairness weighting
         // Individual user grades are not considered as they may be affected by measurement artifacts
         
         // Convert letter grades to numeric scores
@@ -2449,8 +2449,8 @@ class VirtualHousehold {
         const fairnessScore = gradeToScore[overallMetrics.fairness] || 75;
         const stabilityScore = gradeToScore[overallMetrics.stability] || 75;
         
-        // Calculate final score as average of fairness and stability
-        const finalScore = (fairnessScore + stabilityScore) / 2;
+        // Calculate final score with 90% Latency Stability, 10% Network Fairness weighting
+        const finalScore = (stabilityScore * 0.9) + (fairnessScore * 0.1);
         
         
         return scoreToGrade(finalScore);

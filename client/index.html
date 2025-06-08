@@ -328,11 +328,10 @@
                 <div id="householdStatus" class="household-status">Ready to simulate a busy household</div>
             </div>
 
-            <!-- Virtual Users - 4x2 Grid Layout -->
+            <!-- Virtual Users - Horizontal Scroll Layout -->
             <div class="virtual-users">
-                <div class="users-section">
-                    <!-- Top Row: User Cards -->
-                    <div class="users-grid">
+                <!-- User Cards with Horizontal Scroll -->
+                <div class="users-grid">
                         <!-- Alex -->
                         <div class="user-card" id="room-alex" data-user="alex">
                             <div class="user-header">
@@ -345,6 +344,9 @@
                             <div class="activity-info">
                                 <div class="activity-icon">🎮</div>
                                 <div class="activity-text">Counter-Strike 2</div>
+                            </div>
+                            <div class="sentiment-container alex-sentiment" id="alexSentiment">
+                                <span class="sentiment-text">"Connection feels great!"</span>
                             </div>
                             <div class="user-metrics">
                                 <div class="metric metric-download">
@@ -391,6 +393,9 @@
                                 <div class="activity-icon">💻</div>
                                 <div class="activity-text">Microsoft Teams</div>
                             </div>
+                            <div class="sentiment-container sarah-sentiment" id="sarahSentiment">
+                                <span class="sentiment-text">"Can everyone hear me?"</span>
+                            </div>
                             <div class="user-metrics">
                                 <div class="metric metric-download">
                                     <span class="metric-label">Download:</span>
@@ -436,6 +441,9 @@
                                 <div class="activity-icon">📺</div>
                                 <div class="activity-text">Netflix HD</div>
                             </div>
+                            <div class="sentiment-container jake-sentiment" id="jakeSentiment">
+                                <span class="sentiment-text">"Enjoying the show!"</span>
+                            </div>
                             <div class="user-metrics">
                                 <div class="metric metric-download">
                                     <span class="metric-label">Download:</span>
@@ -471,15 +479,18 @@
                         <!-- Computer -->
                         <div class="user-card" id="room-computer" data-user="computer">
                             <div class="user-header">
-                                <div class="user-icon">🤖</div>
+                                <div class="user-icon">🖥️</div>
                                 <div class="user-info">
                                     <h4>Computer</h4>
-                                    <p>Background Downloads</p>
+                                    <p>Background</p>
                                 </div>
                             </div>
                             <div class="activity-info">
                                 <div class="activity-icon">☁️</div>
-                                <div class="activity-text">System Updates</div>
+                                <div class="activity-text">Game Updates</div>
+                            </div>
+                            <div class="sentiment-container computer-sentiment" id="computerSentiment">
+                                <span class="sentiment-text">"Working in background"</span>
                             </div>
                             <div class="user-metrics">
                                 <div class="metric metric-download">
@@ -514,24 +525,6 @@
                         </div>
                     </div>
                     
-                    <!-- Bottom Row: Sentiment Containers -->
-                    <div class="sentiment-grid">
-                        <div class="sentiment-container alex-sentiment" id="alexSentiment">
-                            <span class="sentiment-text">"Connection feels great!"</span>
-                        </div>
-                        
-                        <div class="sentiment-container sarah-sentiment" id="sarahSentiment">
-                            <span class="sentiment-text">"Can everyone hear me?"</span>
-                        </div>
-                        
-                        <div class="sentiment-container jake-sentiment" id="jakeSentiment">
-                            <span class="sentiment-text">"Enjoying the show!"</span>
-                        </div>
-                        
-                        <div class="sentiment-container computer-sentiment" id="computerSentiment">
-                            <span class="sentiment-text">"Working in background"</span>
-                        </div>
-                    </div>
                 </div>
             </div>
 

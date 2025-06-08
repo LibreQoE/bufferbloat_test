@@ -74,7 +74,7 @@ class UIHousehold {
                 name: 'Alex',
                 activity: 'Gaming with low latency needs',
                 icon: '🎮',
-                color: '#45b7d1',
+                color: '#4A7C59', // Green theme for Alex's Bedroom
                 targetDownload: 1.5,  // Mbps - realistic gaming
                 targetUpload: 0.75,   // Mbps - realistic gaming
                 activityType: 'gaming',
@@ -84,7 +84,7 @@ class UIHousehold {
                 name: 'Sarah',
                 activity: 'Video conferencing',
                 icon: '💼',
-                color: '#45b7d1',
+                color: '#4A6B8A', // Blue theme for Home Office
                 targetDownload: 2.5,  // Mbps - realistic HD video call
                 targetUpload: 2.5,    // Mbps - realistic HD video call
                 activityType: 'video_call',
@@ -94,7 +94,7 @@ class UIHousehold {
                 name: 'Jake',
                 activity: 'HD video streaming',
                 icon: '📺',
-                color: '#45b7d1',
+                color: '#6B5B7B', // Purple theme for Living Room
                 targetDownload: 25.0, // Mbps
                 targetUpload: 0.1,    // Mbps - minimal Netflix telemetry
                 activityType: 'streaming',
@@ -103,8 +103,8 @@ class UIHousehold {
             computer: {
                 name: 'Computer',
                 activity: 'High-speed downloads (speed auto-detected)',
-                icon: '💻',
-                color: '#45b7d1',
+                icon: '🎮',
+                color: '#7B6B5B', // Brown theme for Utility Room
                 targetDownload: 200.0, // Mbps - will be updated by Phase 1 speed detection
                 targetUpload: 0.1,    // Mbps - minimal upload (100 Kbps)
                 activityType: 'bulk_transfer',
@@ -1085,10 +1085,8 @@ class UIHousehold {
         const displayWidth = canvas.width / dpr;
         const displayHeight = canvas.height / dpr;
         
-        // Clear canvas with smooth transition
+        // Clear canvas completely (no background fill - let CSS handle it)
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
         
         const data = this.sparklineData[userId].latency;
         if (data.length < 2) return;
@@ -1098,14 +1096,22 @@ class UIHousehold {
         const minLatency = 0;   // Fixed minimum
         const range = maxLatency - minLatency;
         
+        // Get brighter theme colors for better visibility
+        const themeColors = {
+            alex: '#7FD99F',    // Bright green
+            sarah: '#7FB8D9',   // Bright blue
+            jake: '#B89FD9',    // Bright purple
+            computer: '#D9B89F' // Bright brown
+        };
+        
         // Draw smooth sparkline with anti-aliasing
         ctx.save();
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
         
         ctx.beginPath();
-        ctx.strokeStyle = this.users[userId]?.color || '#45b7d1';
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = themeColors[userId] || '#FFFFFF';
+        ctx.lineWidth = 2.5; // Slightly thicker for better visibility
         ctx.lineCap = 'round';
         ctx.lineJoin = 'round';
         
@@ -1124,15 +1130,15 @@ class UIHousehold {
         
         ctx.stroke();
         
-        // Add smooth gradient fill
+        // Add smooth gradient fill with brighter colors
         ctx.lineTo(data.length * stepX, displayHeight);
         ctx.lineTo(0, displayHeight);
         ctx.closePath();
         
         const gradient = ctx.createLinearGradient(0, 0, 0, displayHeight);
-        const color = this.users[userId]?.color || '#45b7d1';
-        gradient.addColorStop(0, color + '40');
-        gradient.addColorStop(1, color + '10');
+        const brightColor = themeColors[userId] || '#FFFFFF';
+        gradient.addColorStop(0, brightColor + '60'); // 38% opacity
+        gradient.addColorStop(1, brightColor + '20'); // 12% opacity
         
         ctx.fillStyle = gradient;
         ctx.fill();
@@ -1752,9 +1758,8 @@ class UIHousehold {
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = 'high';
         
-        // Clear canvas with dark background
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-        ctx.fillRect(0, 0, canvasWidth, canvasHeight);
+        // Clear canvas completely - let CSS handle the background styling
+        ctx.clearRect(0, 0, canvasWidth, canvasHeight);
         
         console.log(`✅ Initialized sparkline for ${userId} with dimensions ${canvasWidth}x${canvasHeight} (DPR: ${dpr})`);
     }
@@ -1805,21 +1810,157 @@ class UIHousehold {
     applySmoothTransitions() {
         const style = document.createElement('style');
         style.textContent = `
-            .metric-value {
-                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            /* User-specific card colors and gradients */
+            #room-alex {
+                background: linear-gradient(135deg, #2D5A3D 0%, #4A7C59 100%);
+                border: 1px solid rgba(74, 124, 89, 0.3);
+                box-shadow: 0 4px 15px rgba(45, 90, 61, 0.2);
             }
-            
+
+            #room-sarah {
+                background: linear-gradient(135deg, #2B4A6B 0%, #4A6B8A 100%);
+                border: 1px solid rgba(74, 107, 138, 0.3);
+                box-shadow: 0 4px 15px rgba(43, 74, 107, 0.2);
+            }
+
+            #room-jake {
+                background: linear-gradient(135deg, #4A3B5C 0%, #6B5B7B 100%);
+                border: 1px solid rgba(107, 91, 123, 0.3);
+                box-shadow: 0 4px 15px rgba(74, 59, 92, 0.2);
+            }
+
+            #room-computer {
+                background: linear-gradient(135deg, #5C4A3B 0%, #7B6B5B 100%);
+                border: 1px solid rgba(123, 107, 91, 0.3);
+                box-shadow: 0 4px 15px rgba(92, 74, 59, 0.2);
+            }
+
+            /* Enhanced card styling */
+            .user-card {
+                border-radius: 12px;
+                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+                backdrop-filter: blur(10px);
+            }
+
+            .user-card:hover {
+                transform: translateY(-2px);
+                box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+            }
+
+            /* Text contrast adjustments for colored backgrounds */
+            .user-card .user-name,
+            .user-card .user-activity,
+            .user-card .metric-label,
+            .user-card .metric-value {
+                color: rgba(255, 255, 255, 0.95);
+                text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+            }
+
+            /* Progress bar enhancements for colored cards */
+            .metric-progress-bar {
+                background: rgba(255, 255, 255, 0.2);
+                border-radius: 4px;
+            }
+
             .metric-progress-fill {
+                background: rgba(255, 255, 255, 0.8);
+                border-radius: 4px;
+                box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
                 transition: width 0.2s cubic-bezier(0.4, 0, 0.2, 1);
             }
-            
+
             .metric-progress-fill.target-achieved {
                 background: linear-gradient(90deg, #4CAF50, #8BC34A);
                 box-shadow: 0 0 8px rgba(76, 175, 80, 0.3);
             }
-            
+
+            /* Status indicator enhancements */
             .family-status {
+                background: rgba(255, 255, 255, 0.1);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                border-radius: 8px;
+                backdrop-filter: blur(5px);
                 transition: all 0.25s ease-in-out;
+            }
+
+            /* Sentiment container styling - positioned within cards below activity-info */
+            .sentiment-container {
+                text-align: center;
+                margin: 8px 0 12px 0;
+                padding: 6px 10px;
+                background: rgba(255, 255, 255, 0.15);
+                border: 1px solid rgba(255, 255, 255, 0.2);
+                border-radius: 6px;
+                backdrop-filter: blur(5px);
+                transition: all 0.25s ease-in-out;
+                position: relative;
+                width: 100%;
+                box-sizing: border-box;
+            }
+
+            .sentiment-text {
+                font-style: italic;
+                font-size: 13px;
+                font-weight: 500;
+                color: rgba(255, 255, 255, 0.95);
+                text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+                line-height: 1.3;
+                margin: 0;
+                display: block;
+            }
+
+            /* Theme-specific sentiment styling - enhanced for within-card placement */
+            #alexSentiment .sentiment-container {
+                background: rgba(255, 255, 255, 0.2);
+                border-color: rgba(127, 217, 159, 0.4);
+                box-shadow: 0 2px 8px rgba(127, 217, 159, 0.15);
+            }
+
+            #sarahSentiment .sentiment-container {
+                background: rgba(255, 255, 255, 0.2);
+                border-color: rgba(127, 184, 217, 0.4);
+                box-shadow: 0 2px 8px rgba(127, 184, 217, 0.15);
+            }
+
+            #jakeSentiment .sentiment-container {
+                background: rgba(255, 255, 255, 0.2);
+                border-color: rgba(184, 159, 217, 0.4);
+                box-shadow: 0 2px 8px rgba(184, 159, 217, 0.15);
+            }
+
+            #computerSentiment .sentiment-container {
+                background: rgba(255, 255, 255, 0.2);
+                border-color: rgba(217, 184, 159, 0.4);
+                box-shadow: 0 2px 8px rgba(217, 184, 159, 0.15);
+            }
+
+            /* Sparkline canvas styling with theme-specific backgrounds */
+            #alexSparkline {
+                border-radius: 4px;
+                background: rgba(74, 124, 89, 0.2);
+                border: 1px solid rgba(74, 124, 89, 0.3);
+            }
+            
+            #sarahSparkline {
+                border-radius: 4px;
+                background: rgba(74, 107, 138, 0.2);
+                border: 1px solid rgba(74, 107, 138, 0.3);
+            }
+            
+            #jakeSparkline {
+                border-radius: 4px;
+                background: rgba(107, 91, 123, 0.2);
+                border: 1px solid rgba(107, 91, 123, 0.3);
+            }
+            
+            #computerSparkline {
+                border-radius: 4px;
+                background: rgba(123, 107, 91, 0.2);
+                border: 1px solid rgba(123, 107, 91, 0.3);
+            }
+
+            .metric-value {
+                transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             }
             
             .sentiment-container {
@@ -1832,8 +1973,9 @@ class UIHousehold {
             
             .metric-target {
                 font-size: 0.8em;
-                color: #666;
+                color: rgba(255, 255, 255, 0.7);
                 margin-top: 2px;
+                text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
             }
             
             /* Smooth color transitions for metrics */
@@ -1857,6 +1999,146 @@ class UIHousehold {
                 0% { opacity: 1; }
                 50% { opacity: 0.5; }
                 100% { opacity: 1; }
+            }
+            
+            /* Room labels for prototype-style theming */
+            .room-label {
+                position: absolute;
+                top: 8px;
+                right: 8px;
+                background: rgba(255, 255, 255, 0.2);
+                color: rgba(255, 255, 255, 0.8);
+                padding: 4px 8px;
+                border-radius: 12px;
+                font-size: 10px;
+                font-weight: 500;
+                text-transform: uppercase;
+                letter-spacing: 0.5px;
+                backdrop-filter: blur(5px);
+            }
+
+            /* Desktop layout for users-grid - 4x1 horizontal layout */
+            .users-grid {
+                display: grid;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 20px;
+                padding: 20px;
+                width: 100%;
+                box-sizing: border-box;
+            }
+
+            /* Mobile responsiveness for colored cards */
+            @media (max-width: 768px) {
+                .users-grid {
+                    display: flex;
+                    flex-direction: row;
+                    overflow-x: auto;
+                    overflow-y: hidden;
+                    gap: 16px;
+                    padding: 0 20px 20px 40px; /* Increased right padding for last card */
+                    scroll-snap-type: x mandatory;
+                    -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+                    scrollbar-width: none; /* Firefox */
+                    -ms-overflow-style: none; /* IE/Edge */
+                    width: 100%;
+                    box-sizing: border-box;
+                }
+                
+                .users-grid::-webkit-scrollbar {
+                    display: none; /* Chrome/Safari */
+                }
+                
+                .user-card {
+                    flex: 0 0 280px; /* Fixed width, no shrinking */
+                    min-width: 280px;
+                    scroll-snap-align: start;
+                    padding: 12px;
+                    min-height: auto;
+                    display: flex;
+                    flex-direction: column;
+                }
+                
+                /* Ensure last card has extra space */
+                .user-card:last-child {
+                    margin-right: 20px;
+                }
+                
+                /* Fix layout spacing for mobile cards */
+                .user-metrics {
+                    display: flex;
+                    flex-direction: column;
+                    gap: 8px;
+                    margin-top: auto;
+                }
+                
+                .metric {
+                    margin-bottom: 6px;
+                }
+                
+                .metric:last-child {
+                    margin-bottom: 0;
+                }
+                
+                .user-card:hover {
+                    transform: none; /* Disable hover effects on mobile */
+                }
+                
+                .user-header {
+                    flex-direction: row;
+                    align-items: center;
+                    margin-bottom: 8px;
+                }
+                
+                .user-name {
+                    font-size: 16px;
+                    font-weight: 600;
+                }
+                
+                .user-activity {
+                    font-size: 12px;
+                    line-height: 1.2;
+                }
+                
+                .metrics-grid {
+                    grid-template-columns: 1fr 1fr;
+                    gap: 8px;
+                }
+                
+                .metric-item {
+                    padding: 6px;
+                    font-size: 11px;
+                }
+                
+                .metric-value {
+                    font-size: 14px;
+                    font-weight: 500;
+                }
+                
+                .metric-label {
+                    font-size: 10px;
+                }
+                
+                .status-message {
+                    font-size: 11px;
+                    line-height: 1.3;
+                }
+                
+                .metric-target {
+                    font-size: 0.7em;
+                }
+                
+                /* Mobile sentiment styling - optimized for within-card placement */
+                .sentiment-container {
+                    margin: 6px 0 8px 0;
+                    padding: 5px 8px;
+                    width: 100%;
+                    box-sizing: border-box;
+                }
+                
+                .sentiment-text {
+                    font-size: 11px;
+                    line-height: 1.2;
+                }
             }
             
             /* Adaptive Virtual Household Phase Indicators */
@@ -2014,10 +2296,8 @@ class UIHousehold {
         const displayWidth = canvas.width / dpr;
         const displayHeight = canvas.height / dpr;
         
-        // Clear canvas
+        // Clear canvas completely (no background fill - let CSS handle it)
         ctx.clearRect(0, 0, canvas.width, canvas.height);
-        ctx.fillStyle = 'rgba(0, 0, 0, 0.2)';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
         
         const data = this.sparklineData[userId].latency;
         if (data.length < 2) return;
@@ -2027,10 +2307,24 @@ class UIHousehold {
         const minLatency = 0;   // Fixed minimum
         const range = maxLatency - minLatency;
         
-        // Draw sparkline
+        // Get brighter theme colors for better visibility
+        const themeColors = {
+            alex: '#7FD99F',    // Bright green
+            sarah: '#7FB8D9',   // Bright blue
+            jake: '#B89FD9',    // Bright purple
+            computer: '#D9B89F' // Bright brown
+        };
+        
+        // Draw sparkline with enhanced visibility
+        ctx.save();
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = 'high';
+        
         ctx.beginPath();
-        ctx.strokeStyle = this.users[userId]?.color || '#45b7d1';
-        ctx.lineWidth = 2;
+        ctx.strokeStyle = themeColors[userId] || '#FFFFFF';
+        ctx.lineWidth = 2.5; // Slightly thicker for better visibility
+        ctx.lineCap = 'round';
+        ctx.lineJoin = 'round';
         
         const stepX = displayWidth / (this.sparklineData[userId].maxPoints - 1);
         
@@ -2047,18 +2341,20 @@ class UIHousehold {
         
         ctx.stroke();
         
-        // Add gradient fill
+        // Add gradient fill with brighter colors
         ctx.lineTo(data.length * stepX, displayHeight);
         ctx.lineTo(0, displayHeight);
         ctx.closePath();
         
         const gradient = ctx.createLinearGradient(0, 0, 0, displayHeight);
-        const color = this.users[userId]?.color || '#45b7d1';
-        gradient.addColorStop(0, color + '40'); // 25% opacity
-        gradient.addColorStop(1, color + '10'); // 6% opacity
+        const brightColor = themeColors[userId] || '#FFFFFF';
+        gradient.addColorStop(0, brightColor + '60'); // 38% opacity
+        gradient.addColorStop(1, brightColor + '20'); // 12% opacity
         
         ctx.fillStyle = gradient;
         ctx.fill();
+        
+        ctx.restore();
     }
     
     showError(error) {

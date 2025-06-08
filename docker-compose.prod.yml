@@ -1,0 +1,81 @@
+version: '3.8'
+
+# Production overrides for LibreQoS Bufferbloat Test
+services:
+  libreqos-bufferbloat:
+    # Use pre-built image in production
+    image: libreqos-bufferbloat:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+      cache_from:
+        - libreqos-bufferbloat:latest
+    # Production logging configuration
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    # Production resource limits
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: '1.0'
+        reservations:
+          memory: 512M
+          cpus: '0.5'
+    # Production-specific environment variables
+    environment:
+      - PYTHONUNBUFFERED=1
+      - PYTHONDONTWRITEBYTECODE=1
+      - SSL_CERT_PATH=/app/ssl/cert.pem
+      - SSL_KEY_PATH=/app/ssl/key.pem
+    # Enhanced security
+    security_opt:
+      - no-new-privileges:true
+    read_only: false
+    tmpfs:
+      - /tmp
+    # Production volumes for SSL certificates
+    volumes:
+      - ./ssl:/app/ssl:ro
+      - libreqos-logs:/app/logs
+    labels:
+      - "com.libreqos.service=bufferbloat-test"
+      - "com.libreqos.version=1.0"
+
+  traefik:
+    # Production Traefik configuration
+    command:
+      - "--api.insecure=false"
+      - "--providers.docker=true"
+      - "--providers.docker.exposedbydefault=false"
+      - "--entrypoints.web.address=:80"
+      - "--entrypoints.websecure.address=:443"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge=true"
+      - "--certificatesresolvers.letsencrypt.acme.httpchallenge.entrypoint=web"
+      - "--certificatesresolvers.letsencrypt.acme.email=${ACME_EMAIL:-admin@example.com}"
+      - "--certificatesresolvers.letsencrypt.acme.storage=/letsencrypt/acme.json"
+      - "--global.checkNewVersion=false"
+      - "--global.sendAnonymousUsage=false"
+      - "--log.level=WARN"
+      - "--accesslog=true"
+      - "--accesslog.filepath=/var/log/traefik/access.log"
+    volumes:
+      - ./letsencrypt:/letsencrypt
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - traefik-logs:/var/log/traefik
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    labels:
+      - "traefik.enable=false"
+
+volumes:
+  libreqos-logs:
+    driver: local
+  traefik-logs:
+    driver: local

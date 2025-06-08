@@ -242,6 +242,43 @@ Benefits:
 - **Direct process connections** maintain optimal performance
 - **Enhanced security** for production deployments
 
+### Docker Deployment
+
+For containerized deployment, Docker support is available:
+
+#### Quick Start with Docker
+
+```bash
+# Build and run with docker-compose (serves on port 80)
+docker-compose up -d
+
+# Or build manually with custom port mapping
+docker build -t libreqos-bufferbloat .
+docker run -p 80:8000 -p 8001-8004:8001-8004 -p 8085:8085 libreqos-bufferbloat
+```
+
+#### Docker Configuration
+
+The Docker setup includes:
+- **Multi-process support**: All processes run within a single container
+- **Port exposure**: Ports 8000-8004, 8085, and optionally 443
+- **SSL support**: Mount certificates via volumes
+- **Development mode**: Optional source code mounting for live updates
+
+```yaml
+# docker-compose.yml example with SSL
+services:
+  libreqos-bufferbloat:
+    build: .
+    ports:
+      - "8000:8000"
+      - "8001-8004:8001-8004"
+      - "8085:8085"
+      - "443:443"
+    volumes:
+      - ./ssl:/app/ssl:ro
+```
+
 ### Configuration Options
 
 #### Multiprocess Configuration

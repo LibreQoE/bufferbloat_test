@@ -1,8 +1,6 @@
 import os
 import asyncio
 import uvicorn
-import hypercorn.asyncio
-from hypercorn.config import Config
 from fastapi import FastAPI, Response, Request, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
@@ -514,33 +512,18 @@ async def run_main_server(args):
     await configure_process_manager_ssl(args.ssl_keyfile, args.ssl_certfile)
     
     if args.ssl_keyfile and args.ssl_certfile:
-        # Run with HTTPS
-        if args.http2:
-            # Run with HTTP/2 using Hypercorn
-            logger.info(f"Starting HTTPS server with HTTP/2 support on port {args.port}")
-            config = Config()
-            config.bind = [f"0.0.0.0:{args.port}"]
-            config.certfile = args.ssl_certfile
-            config.keyfile = args.ssl_keyfile
-            config.alpn_protocols = ["h2", "http/1.1"]  # Enable HTTP/2
-            config.h2_max_concurrent_streams = 250  # Increase from default 100
-            config.h2_max_inbound_frame_size = 16384  # 16KB (default)
-            config.use_reloader = not args.production  # Disable reloader in production
-            
-            await hypercorn.asyncio.serve(app, config)
-        else:
-            # Run with HTTPS using Uvicorn (HTTP/1.1 only)
-            logger.info(f"Starting HTTPS server (HTTP/1.1 only) on port {args.port}")
-            config = uvicorn.Config(
-                app,
-                host="0.0.0.0",
-                port=args.port,
-                ssl_keyfile=args.ssl_keyfile,
-                ssl_certfile=args.ssl_certfile,
-                reload=not args.production  # Disable reloader in production
-            )
-            server = uvicorn.Server(config)
-            await server.serve()
+        # Run with HTTPS using Uvicorn
+        logger.info(f"Starting HTTPS server on port {args.port}")
+        config = uvicorn.Config(
+            app,
+            host="0.0.0.0",
+            port=args.port,
+            ssl_keyfile=args.ssl_keyfile,
+            ssl_certfile=args.ssl_certfile,
+            reload=not args.production  # Disable reloader in production
+        )
+        server = uvicorn.Server(config)
+        await server.serve()
     else:
         # Run with HTTP
         logger.info(f"Starting HTTP server on port {args.port}")
@@ -573,7 +556,6 @@ if __name__ == "__main__":
     parser.add_argument("--port", type=int, default=80, help="Port to run the server on")
     parser.add_argument("--ssl-keyfile", type=str, help="SSL key file path for HTTPS")
     parser.add_argument("--ssl-certfile", type=str, help="SSL certificate file path for HTTPS")
-    parser.add_argument("--http2", action="store_true", help="Enable HTTP/2 support (requires HTTPS)")
     parser.add_argument("--production", action="store_true", help="Run in production mode (disables auto-reload)")
     args = parser.parse_args()
     

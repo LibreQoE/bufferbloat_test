@@ -147,7 +147,7 @@ function createThroughputChart(canvasId) {
                         color: 'white' // Make text white to match web page design
                     },
                     min: 0,
-                    suggestedMax: 100, // Start with 100 Mbps and auto-adjust as needed
+                    suggestedMax: 10, // Start with 10 Mbps and auto-adjust as needed
                     ticks: {
                         color: 'white' // Make tick labels white
                     },
@@ -268,7 +268,7 @@ function updateThroughputChart(chart) {
         // Dynamic download y-axis adjustment
     } else {
         // Default if no data - start with a reasonable minimum
-        chart.options.scales.y.suggestedMax = 100;
+        chart.options.scales.y.suggestedMax = 10;
     }
     
     if (allUploadData.length > 0) {
@@ -310,15 +310,27 @@ function updateThroughputChart(chart) {
  * @param {number} throughput - The throughput in Mbps
  * @param {boolean} isOutOfPhase - Whether the traffic is out of phase
  */
-function addDownloadThroughputDataPoint(chart, seconds, throughput, isOutOfPhase = false) {
+function addDownloadThroughputDataPoint(chart, seconds, throughput, isOutOfPhase = false, isInterpolated = false) {
     if (!chart) return;
     
     const datasetIndex = isOutOfPhase ? 2 : 0;
     
-    chart.data.datasets[datasetIndex].data.push({
+    // Create data point with metadata for enhanced handling
+    const dataPoint = {
         x: seconds,
-        y: throughput
-    });
+        y: throughput,
+        isInterpolated,
+        isOutOfPhase
+    };
+    
+    chart.data.datasets[datasetIndex].data.push(dataPoint);
+    
+    // During severe bufferbloat, add visual indicators
+    if (isInterpolated) {
+        // Mark interpolated points with different styling
+        chart.data.datasets[datasetIndex].pointBackgroundColor = chart.data.datasets[datasetIndex].pointBackgroundColor || [];
+        chart.data.datasets[datasetIndex].pointBackgroundColor.push('rgba(255, 165, 0, 0.7)'); // Orange for interpolated
+    }
     
     chart.update('none');
 }
@@ -330,7 +342,7 @@ function addDownloadThroughputDataPoint(chart, seconds, throughput, isOutOfPhase
  * @param {number} throughput - The throughput in Mbps
  * @param {boolean} isOutOfPhase - Whether the traffic is out of phase
  */
-function addUploadThroughputDataPoint(chart, seconds, throughput, isOutOfPhase = false) {
+function addUploadThroughputDataPoint(chart, seconds, throughput, isOutOfPhase = false, isInterpolated = false) {
     if (!chart) return;
     
     const datasetIndex = isOutOfPhase ? 3 : 1;

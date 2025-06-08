@@ -159,7 +159,7 @@ class AdaptiveController {
             // Update Computer profile with detected speed (but don't send to server yet)
             const detectedSpeed = this.warmupResults.download80th;
             this.virtualHousehold.userConfigs.computer.targetDownload = detectedSpeed;
-            this.virtualHousehold.userConfigs.computer.description = `System Updates (${detectedSpeed.toFixed(1)} Mbps detected)`;
+            this.virtualHousehold.userConfigs.computer.description = `Game Updates (${detectedSpeed.toFixed(1)} Mbps detected)`;
             this.virtualHousehold.userConfigs.computer.familyName = `Computer (${detectedSpeed.toFixed(1)} Mbps detected)`;
             
             console.log(`🔧 Updated Computer profile locally: ${detectedSpeed.toFixed(1)} Mbps`);

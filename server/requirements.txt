@@ -1,6 +1,5 @@
 fastapi==0.104.1
 uvicorn==0.23.2
-hypercorn==0.15.0
 python-multipart==0.0.6
 h2==4.1.0
 aiortc==1.6.0

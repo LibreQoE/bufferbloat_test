@@ -13,7 +13,8 @@ import {
 
 import {
     determineGrade,
-    calculateTotalGrade
+    calculateTotalGrade,
+    calculateTotalGradeFromLatency
 } from './shared/gradeCalculations.js';
 
 /**
@@ -158,8 +159,9 @@ function analyzeAndDisplayResults(testData) {
         const uploadGrade = determineGrade(uploadLatencyIncrease);
         const bidirectionalGrade = determineGrade(bidirectionalLatencyIncrease);
         
-        // Calculate Total Grade
-        const totalGrade = calculateTotalGrade(downloadGrade, uploadGrade, bidirectionalGrade);
+        // Calculate Total Grade based on average latency increase
+        // (downloadLatencyIncrease + uploadLatencyIncrease + bidirectionalLatencyIncrease) / 3
+        const totalGrade = calculateTotalGradeFromLatency(downloadLatencyIncrease, uploadLatencyIncrease, bidirectionalLatencyIncrease);
         
         // Transform to unified format using adapter
         const adapter = createSingleUserAdapter();

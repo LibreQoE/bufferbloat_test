@@ -13,25 +13,12 @@ const CHART_CONFIG = {
             borderColor: '#ffffff',
             backgroundColor: 'rgba(255, 255, 255, 0.1)',
             borderWidth: 2,
-            pointRadius: function(context) {
-                // Make timeout points larger and more visible
-                const dataPoint = context.dataset.data[context.dataIndex];
-                return dataPoint && dataPoint.isTimeout ? 6 : 1; // Increased from 4 to 6 for better visibility
-            },
-            pointBackgroundColor: function(context) {
-                // Use LibreQoS Blue color for timeout points
-                const dataPoint = context.dataset.data[context.dataIndex];
-                return dataPoint && dataPoint.isTimeout ? 'rgba(75, 108, 151, 0.9)' : 'rgba(255, 255, 255, 0.8)';
-            },
-            pointBorderColor: function(context) {
-                // Use LibreQoS Blue border for timeout points
-                const dataPoint = context.dataset.data[context.dataIndex];
-                return dataPoint && dataPoint.isTimeout ? 'rgba(75, 108, 151, 1)' : 'rgba(255, 255, 255, 1)';
-            },
+            pointRadius: 1, // Consistent size for all points
+            pointBackgroundColor: 'rgba(255, 255, 255, 0.8)', // Same color for all points
+            pointBorderColor: 'rgba(255, 255, 255, 1)', // Same border for all points
             pointStyle: function(context) {
-                // Use triangle for timeout points to make them more distinctive
-                const dataPoint = context.dataset.data[context.dataIndex];
-                return dataPoint && dataPoint.isTimeout ? 'triangle' : 'circle';
+                // Use circle for all points (no special styling for timeouts)
+                return 'circle';
             },
             pointHoverRadius: 3,
             tension: 0.2
@@ -76,7 +63,7 @@ const CHART_CONFIG = {
                     color: '#ffffff'
                 },
                 min: 0,
-                suggestedMax: 1200, // Ensure timeout values (1000ms) are visible
+                suggestedMax: 1000, // Ensure timeout values (1000ms) are visible
                 ticks: {
                     color: '#ffffff',
                     font: {
@@ -106,7 +93,7 @@ const CHART_CONFIG = {
                     color: '#ffffff'
                 },
                 min: 0,
-                suggestedMax: 1200, // Ensure timeout values (1000ms) are visible
+                suggestedMax: 1000, // Ensure timeout values (1000ms) are visible
                 ticks: {
                     color: '#ffffff',
                     font: {
@@ -355,7 +342,7 @@ function addLatencyDataPoint(chart, seconds, latency, isTimeout = false) {
     // Ensure timeout values are always visible by setting a minimum suggestedMax
     // This ensures the chart scale includes the timeout values
     if (isTimeout || latency > 500) {
-        chart.options.scales.y.suggestedMax = Math.max(chart.options.scales.y.suggestedMax || 0, 1200);
+        chart.options.scales.y.suggestedMax = Math.max(chart.options.scales.y.suggestedMax || 0, 1000);
     }
     
     // Adjust y-axis scale if needed for non-timeout values
