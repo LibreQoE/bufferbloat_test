@@ -44,6 +44,8 @@ import throughputMonitor, {
 import throughputTracker from './throughputTracker.js';
 import { getAdaptiveWarmupConfig, logWithLevel } from './config.js';
 import { initializeShare } from './share.js';
+import { telemetryManager } from './telemetry.js';
+import { serverDiscovery } from './discovery.js';
 
 // Virtual Household Mode imports
 import VirtualHousehold from './virtualHousehold/virtualHousehold.js';
@@ -98,12 +100,17 @@ let uiHousehold = null;
 // Current test mode
 let currentMode = 'single'; // 'single' or 'household'
 
+
 /**
  * Initialize the application
  */
 async function init() {
     console.log('🎯 ADAPTIVE WARMUP: Legacy discovery system removed - always using adaptive warmup');
     console.log('🚀 Starting app initialization...');
+    
+    // Set initial mode CSS class for strict results separation
+    document.body.classList.add('single-user-mode');
+    document.body.classList.remove('virtual-household-mode');
     
     // Initialize optimized xoshiro data pools for better performance
     StreamManager.initializeOptimizations();
@@ -133,6 +140,17 @@ async function init() {
     
     // Initialize share functionality
     initializeShare();
+    
+    // Initialize telemetry UI
+    telemetryManager.insertUI();
+    
+    // Discover optimal test server
+    try {
+        await serverDiscovery.discoverServer();
+        console.log('✅ Server discovery completed');
+    } catch (error) {
+        console.error('❌ Server discovery failed, some features may not work:', error);
+    }
     
     // Initialize Virtual Household Mode
     console.log('🏠 About to initialize Virtual Household Mode...');
@@ -304,7 +322,7 @@ function handleTestStart() {
     // Start the UI updates
     startTestUI();
     
-    // Initialize and start the latency worker
+    // Initialize and start the latency worker (after token should be available)
     initLatencyWorker();
     
     // Simple warmup - no complex parameter visualization needed
@@ -458,6 +476,16 @@ async function handlePhaseChange(event) {
             
         case TEST_PHASES.UPLOAD:
             updateTestStatus('📏 Upload Measurement', 'Measuring upload performance under load...');
+            
+            // Wait for warmup parameters to be available (with timeout)
+            let waitAttempts = 0;
+            const maxWaitAttempts = 20; // Wait up to 2 seconds (20 * 100ms)
+            while (!testData.optimalUploadParams && waitAttempts < maxWaitAttempts) {
+                console.log(`⏳ Waiting for upload warmup parameters... (attempt ${waitAttempts + 1})`);
+                await new Promise(resolve => setTimeout(resolve, 100));
+                waitAttempts++;
+            }
+            
             console.log(`Using discovered optimal upload parameters: ${JSON.stringify(testData.optimalUploadParams)}`);
             
             // Add null value for upload to break the line between Upload Warmup and Upload phases
@@ -843,6 +871,14 @@ function initLatencyWorker() {
     // Set up message handler
     latencyWorker.onmessage = handleLatencyWorkerMessage;
     
+    // Send discovered server info to worker
+    if (serverDiscovery.currentServer) {
+        latencyWorker.postMessage({
+            command: 'setAuth',
+            serverUrl: serverDiscovery.currentServer.url
+        });
+    }
+    
     // Start the worker
     latencyWorker.postMessage({ command: 'start' });
 }
@@ -1103,9 +1139,18 @@ function setupModeToggle() {
     const householdContainer = document.getElementById('householdContainer');
     const headerDescription = document.getElementById('headerDescription');
     
-    if (!singleUserMode || !householdMode || !testContainer || !householdContainer) {
-        console.warn('⚠️ Mode toggle elements not found');
+    // Check if essential mode toggle elements exist
+    if (!singleUserMode || !householdMode) {
+        console.error('❌ Mode toggle buttons not found - this is critical');
         return;
+    }
+    
+    // Warn about missing containers but continue with toggle setup
+    if (!testContainer) {
+        console.warn('⚠️ Single User test container not found');
+    }
+    if (!householdContainer) {
+        console.warn('⚠️ Virtual Household container not found');
     }
     
     // Set initial state
@@ -1140,6 +1185,8 @@ function switchToSingleUserMode() {
     if (virtualHousehold && virtualHousehold.isActive) {
         virtualHousehold.stop();
     }
+    
+    // Token system removed
     
     // Hide household UI
     if (uiHousehold) {
@@ -1183,6 +1230,8 @@ function switchToHouseholdMode() {
     
     // Stop all streams
     StreamManager.terminateAllStreams();
+    
+    // Token system removed
     
     // Hide Single User results when switching to Virtual Household mode
     const singleUserResults = document.getElementById('results');
@@ -1232,6 +1281,7 @@ function hasValidResults(container) {
     return hasGradeValues || hasStats || hasUserResults;
 }
 
+
 /**
  * Update mode display based on current mode
  */
@@ -1246,24 +1296,35 @@ function updateModeDisplay() {
     const singleUserResults = document.getElementById('results');
     const householdResults = document.getElementById('householdResults');
     
-    if (!singleUserMode || !householdMode || !testContainer || !householdContainer) {
+    // Check if essential mode toggle elements exist
+    if (!singleUserMode || !householdMode) {
+        console.error('❌ Mode toggle buttons not found in updateModeDisplay()');
         return;
     }
     
     if (currentMode === 'single') {
+        // Apply mode-aware CSS classes for strict separation
+        document.body.classList.add('single-user-mode');
+        document.body.classList.remove('virtual-household-mode');
+        
         // Update mode toggle appearance
         singleUserMode.classList.add('active');
         householdMode.classList.remove('active');
         
-        // Show/hide containers
-        testContainer.style.display = 'block';
-        householdContainer.classList.add('hidden');
-        
-        // Show Single User results if they exist, hide Virtual Household results
-        if (singleUserResults && hasValidResults(singleUserResults)) {
-            singleUserResults.classList.remove('hidden');
-            singleUserResults.style.display = 'block';
+        // Show/hide containers (check if they exist)
+        if (testContainer) {
+            testContainer.style.display = 'block';
         }
+        if (householdContainer) {
+            householdContainer.classList.add('hidden');
+        }
+        
+        // Always hide Single User results in Single User mode - they will be shown by results.js when test completes
+        if (singleUserResults) {
+            singleUserResults.classList.add('hidden');
+            singleUserResults.style.display = 'none';
+        }
+        // Virtual Household results will be hidden by CSS mode classes
         if (householdResults) {
             householdResults.classList.add('hidden');
         }
@@ -1274,19 +1335,28 @@ function updateModeDisplay() {
         }
         
     } else if (currentMode === 'household') {
+        // Apply mode-aware CSS classes for strict separation
+        document.body.classList.add('virtual-household-mode');
+        document.body.classList.remove('single-user-mode');
+        
         // Update mode toggle appearance
         singleUserMode.classList.remove('active');
         householdMode.classList.add('active');
         
-        // Show/hide containers
-        testContainer.style.display = 'none';
-        householdContainer.classList.remove('hidden');
-        
-        // Show Virtual Household results if they exist, hide Single User results
-        if (householdResults && hasValidResults(householdResults)) {
-            householdResults.classList.remove('hidden');
-            householdResults.style.display = 'block';
+        // Show/hide containers (check if they exist)
+        if (testContainer) {
+            testContainer.style.display = 'none';
         }
+        if (householdContainer) {
+            householdContainer.classList.remove('hidden');
+        }
+        
+        // Always hide Virtual Household results in Virtual Household mode - they will be shown by uiHousehold.js when test completes
+        if (householdResults) {
+            householdResults.classList.add('hidden');
+            householdResults.style.display = 'none';
+        }
+        // Single User results will be hidden by CSS mode classes
         if (singleUserResults) {
             singleUserResults.classList.add('hidden');
         }

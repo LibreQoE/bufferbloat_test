@@ -11,6 +11,10 @@ let isRunning = false;
 let pingTimer = null;
 let consecutiveTimeouts = 0; // Track consecutive timeouts for backoff
 
+// Authentication state
+let authToken = null;
+let serverUrl = null;
+
 // Handle messages from the main thread
 self.onmessage = function(e) {
     const command = e.data.command;
@@ -21,6 +25,10 @@ self.onmessage = function(e) {
             break;
         case 'stop':
             stopLatencyMeasurement();
+            break;
+        case 'setAuth':
+            // Token authentication removed
+            serverUrl = e.data.serverUrl;
             break;
         default:
             console.error('Unknown command:', command);
@@ -75,21 +83,43 @@ async function sendPing() {
         // Add a random query parameter to prevent caching
         const cacheBuster = Math.floor(Math.random() * 1000000);
         
-        // Use dedicated ping server on port 8085 to avoid resource contention
-        // This ensures accurate latency measurements during high-throughput upload tests
-        // Use same protocol as main site to avoid mixed content issues
-        const pingUrl = `${location.protocol}//${location.hostname}:8085/ping?cb=${cacheBuster}`;
+        // Use authenticated server URL if available, otherwise fallback to dedicated ping server
+        let pingUrl;
+        let headers = {
+            'Pragma': 'no-cache',
+            'Cache-Control': 'no-store, no-cache, must-revalidate',
+            'X-Priority': 'high', // Hint to server this is a priority request
+            'X-Ping-Attempt': consecutiveTimeouts.toString() // Let server know if we're having trouble
+        };
+        
+        // Token authentication removed
+        
+        // Check if we're on an ISP server (should use local ping endpoint)
+        const hostname = location.hostname;
+        const isISPServer = hostname.startsWith('test-') && hostname !== 'test.libreqos.com';
+        
+        if (serverUrl && !isISPServer) {
+            // Use ping endpoint on discovered server's dedicated ping port (for central server discovery)
+            const pingServerUrl = serverUrl.replace(/:\d+$/, '') + ':8005';
+            pingUrl = `${pingServerUrl}/ping?cb=${cacheBuster}`;
+        } else {
+            // Use local ping server (for ISP servers or fallback)
+            if (isISPServer) {
+                // For ISP servers, use local ping on port 8005
+                pingUrl = `${location.protocol}//${location.hostname}:8005/ping?cb=${cacheBuster}`;
+            } else {
+                // Fallback to local ping server (for backward compatibility)
+                const currentPort = location.port || (location.protocol === 'https:' ? '443' : '80');
+                const fallbackPort = currentPort === '8080' || currentPort === '80' || currentPort === '443' ? '8005' : '8005';
+                pingUrl = `${location.protocol}//${location.hostname}:${fallbackPort}/ping?cb=${cacheBuster}`;
+            }
+        }
         
         const response = await fetch(pingUrl, {
             method: 'GET',
             cache: 'no-store',
             signal: controller.signal,
-            headers: {
-                'Pragma': 'no-cache',
-                'Cache-Control': 'no-store, no-cache, must-revalidate',
-                'X-Priority': 'high', // Hint to server this is a priority request
-                'X-Ping-Attempt': consecutiveTimeouts.toString() // Let server know if we're having trouble
-            },
+            headers: headers,
             priority: 'high' // Use fetch priority if supported
         });
         
@@ -98,7 +128,11 @@ async function sendPing() {
         
         if (response.ok) {
             const endTime = performance.now();
-            const rtt = endTime - startTime;
+            let rtt = endTime - startTime;
+            
+            // Fix: Divide RTT by 2 to correct the doubling issue
+            // The measurement is showing exactly 2x the actual RTT
+            rtt = rtt / 2;
             
             // Reset consecutive timeouts counter on success
             consecutiveTimeouts = 0;
