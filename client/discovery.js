@@ -131,30 +131,31 @@ class ServerDiscovery {
     updateServerInfoDisplay() {
         if (!this.currentServer) return;
 
-        const serverInfoElement = document.getElementById('serverInfo');
-        const serverSponsorElement = document.getElementById('serverSponsor');
+        const headerDescriptionElement = document.getElementById('headerDescription');
         
-        if (serverInfoElement && serverSponsorElement) {
+        if (headerDescriptionElement) {
             // Only show on central server (test.libreqos.com)
             if (this.isCentralServer) {
                 const sponsorName = this.currentServer.sponsor?.name || this.currentServer.name;
                 const sponsorUrl = this.currentServer.sponsor?.url;
                 const city = this.currentServer.location?.city || 'Unknown';
                 
+                let sponsorText;
                 if (sponsorUrl) {
                     // Create clickable sponsor link
-                    serverSponsorElement.innerHTML = `Sponsor: <a href="${sponsorUrl}" target="_blank" rel="noopener noreferrer">${sponsorName}</a> | ${city}`;
+                    sponsorText = `Sponsor: <a href="${sponsorUrl}" target="_blank" rel="noopener noreferrer">${sponsorName}</a> | ${city}`;
                 } else {
                     // Fallback to plain text if no URL
-                    serverSponsorElement.textContent = `Sponsor: ${sponsorName} | ${city}`;
+                    sponsorText = `Sponsor: ${sponsorName} | ${city}`;
                 }
                 
-                serverInfoElement.style.display = 'block';
+                // Add sponsor info as a second line under the header description
+                headerDescriptionElement.innerHTML = `Measure your connection's latency under load<br><span class="sponsor-info">${sponsorText}</span>`;
                 
                 console.log(`📋 Server info displayed: ${sponsorName} | ${city}${sponsorUrl ? ` (${sponsorUrl})` : ''}`);
             } else {
-                // Hide on ISP servers
-                serverInfoElement.style.display = 'none';
+                // Reset to original text on ISP servers
+                headerDescriptionElement.textContent = "Measure your connection's latency under load";
             }
         }
     }

@@ -71,25 +71,20 @@ header {
     text-align: center;
 }
 
-/* Server info display */
-.server-info {
-    text-align: center;
-    margin-bottom: 10px;
-}
-
-.server-info span {
+/* Sponsor info in header description */
+.sponsor-info {
     font-size: 14px;
     color: var(--text);
     font-weight: normal;
 }
 
-.server-info a {
+.sponsor-info a {
     color: var(--accent);
     text-decoration: none;
     transition: color 0.2s ease;
 }
 
-.server-info a:hover {
+.sponsor-info a:hover {
     color: var(--primary);
     text-decoration: underline;
 }

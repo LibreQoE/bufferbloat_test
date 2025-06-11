@@ -316,7 +316,7 @@
             <div class="household-controls">
                 <button id="start-household-test" class="btn primary">Start Test</button>
                 <div class="test-description">
-                    <p>Automatically detects your connection speed and simulates a busy household with 4 users competing for bandwidth.</p>
+                    <p>Simulates a household with 4 users competing for bandwidth. Limitations: best for connections under 200 Mbps.</p>
                     <p><strong>Phase 1:</strong> Connection speed detection (10s) → <strong>Phase 2:</strong> Household simulation using detected speed (30s)</p>
                 </div>
                 <div class="test-progress-container">
@@ -654,7 +654,7 @@
                                 <p><strong>Updated Weighting Formula:</strong></p>
                                 <ul>
                                     <li><strong>Network Fairness (40%):</strong> How evenly bandwidth is distributed among users</li>
-                                    <li><strong>Latency Stability (30%):</strong> Weighted stability prioritizing latency-sensitive users (Alex: 48%, Sarah: 48%, Jake: 4%, Computer: 0%)</li>
+                                    <li><strong>Latency Stability (30%):</strong> Weighted stability prioritizing latency-sensitive users (Alex: 45%, Sarah: 45%, Jake: 10%, Computer: 0%)</li>
                                     <li><strong>Individual User Performance (30%):</strong> Average of all four virtual users' individual grades using enhanced scoring</li>
                                 </ul>
                                 <p><strong>Enhanced Calculation Steps:</strong></p>
@@ -1212,6 +1212,8 @@
     <script src="virtualHousehold/antiChunkingManager.js"></script>
     <script src="virtualHousehold/householdWarmup.js"></script>
     <script src="virtualHousehold/adaptiveController.js"></script>
+    
+    <!-- Token manager removed -->
     
     <!-- Load modules -->
     <script type="module" src="app.js"></script>
