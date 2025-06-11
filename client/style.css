@@ -83,6 +83,17 @@ header {
     font-weight: normal;
 }
 
+.server-info a {
+    color: var(--accent);
+    text-decoration: none;
+    transition: color 0.2s ease;
+}
+
+.server-info a:hover {
+    color: var(--primary);
+    text-decoration: underline;
+}
+
 /* Sponsor heading */
 .sponsor-heading {
     text-align: center;
