@@ -71,11 +71,13 @@ header {
     text-align: center;
 }
 
-/* Sponsor info in header description */
+/* Sponsor info display */
 .sponsor-info {
     font-size: 14px;
     color: var(--text);
     font-weight: normal;
+    text-align: center;
+    margin-top: 5px;
 }
 
 .sponsor-info a {

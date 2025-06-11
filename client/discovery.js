@@ -131,9 +131,9 @@ class ServerDiscovery {
     updateServerInfoDisplay() {
         if (!this.currentServer) return;
 
-        const headerDescriptionElement = document.getElementById('headerDescription');
+        const sponsorInfoElement = document.getElementById('sponsorInfo');
         
-        if (headerDescriptionElement) {
+        if (sponsorInfoElement) {
             // Only show on central server (test.libreqos.com)
             if (this.isCentralServer) {
                 const sponsorName = this.currentServer.sponsor?.name || this.currentServer.name;
@@ -149,13 +149,13 @@ class ServerDiscovery {
                     sponsorText = `Sponsor: ${sponsorName} | ${city}`;
                 }
                 
-                // Add sponsor info as a second line under the header description
-                headerDescriptionElement.innerHTML = `Measure your connection's latency under load<br><span class="sponsor-info">${sponsorText}</span>`;
+                sponsorInfoElement.innerHTML = sponsorText;
+                sponsorInfoElement.style.display = 'block';
                 
                 console.log(`📋 Server info displayed: ${sponsorName} | ${city}${sponsorUrl ? ` (${sponsorUrl})` : ''}`);
             } else {
-                // Reset to original text on ISP servers
-                headerDescriptionElement.textContent = "Measure your connection's latency under load";
+                // Hide on ISP servers
+                sponsorInfoElement.style.display = 'none';
             }
         }
     }
