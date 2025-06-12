@@ -238,7 +238,6 @@ sudo ./start_https.sh
 
 Benefits:
 - **Native SSL/TLS encryption** without proxy overhead
-- **HTTP/2 support** for improved performance
 - **Direct process connections** maintain optimal performance
 - **Enhanced security** for production deployments
 
