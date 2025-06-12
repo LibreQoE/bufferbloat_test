@@ -87,7 +87,74 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Token system removed for simplicity
+# Rate limiting middleware
+@app.middleware("http")
+async def rate_limiting_middleware(request: Request, call_next):
+    """Apply rate limiting to download and WebSocket endpoints"""
+    if not RATE_LIMITING_AVAILABLE:
+        return await call_next(request)
+    
+    # Get client IP (handle proxy headers)
+    client_ip = get_client_ip(request)
+    
+    # Check rate limits for download endpoints
+    if request.url.path in ["/download", "/netflix-chunk"]:
+        allowed, error_msg = rate_limiter.check_download_limit(client_ip)
+        if not allowed:
+            usage_stats = rate_limiter.get_usage_stats(client_ip)
+            return JSONResponse(
+                status_code=429,
+                content={
+                    "error": "Rate limit exceeded",
+                    "message": error_msg,
+                    "retry_after": 3600,  # 1 hour
+                    "current_usage": usage_stats
+                }
+            )
+    
+    # Process the request
+    response = await call_next(request)
+    
+    # Track download bandwidth after successful response
+    if (request.url.path in ["/download", "/netflix-chunk"] and 
+        response.status_code == 200 and
+        hasattr(response, 'headers')):
+        
+        # Try to get content length from response
+        content_length = response.headers.get('content-length')
+        if content_length:
+            try:
+                bytes_sent = int(content_length)
+                rate_limiter.track_download_request(client_ip, bytes_sent)
+            except (ValueError, TypeError):
+                # Content-length not available or invalid, skip tracking
+                pass
+    
+    return response
+
+def get_client_ip(request: Request) -> str:
+    """Extract client IP from request, handling proxy headers"""
+    # Check for forwarded IP headers (common in proxy setups)
+    forwarded_ip = request.headers.get("x-forwarded-for")
+    if forwarded_ip:
+        # Take the first IP in case of multiple proxies
+        return forwarded_ip.split(",")[0].strip()
+    
+    real_ip = request.headers.get("x-real-ip")
+    if real_ip:
+        return real_ip.strip()
+    
+    # Fall back to direct client IP
+    return request.client.host if request.client else "unknown"
+
+# Rate limiting system
+try:
+    from server.simple_rate_limiter import rate_limiter
+    RATE_LIMITING_AVAILABLE = True
+    logger.info("🛡️ Rate limiting system available")
+except ImportError as e:
+    RATE_LIMITING_AVAILABLE = False
+    logger.warning(f"⚠️ Rate limiting system not available: {e}")
 
 # Use shared endpoint modules for main server (same as workers)
 async def setup_main_server_endpoints():
@@ -668,6 +735,28 @@ async def virtual_household_health():
     except Exception as e:
         logger.error(f"❌ Error in health check: {e}")
         return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.get("/api/rate-limit-status")
+async def rate_limit_status(request: Request):
+    """Get rate limiting status and statistics"""
+    if not RATE_LIMITING_AVAILABLE:
+        return {"available": False, "message": "Rate limiting not available"}
+    
+    client_ip = get_client_ip(request)
+    usage_stats = rate_limiter.get_usage_stats(client_ip)
+    memory_stats = rate_limiter.get_memory_stats()
+    
+    return {
+        "available": True,
+        "client_ip": client_ip,
+        "usage": usage_stats,
+        "system": memory_stats,
+        "limits": {
+            "downloads_per_hour": rate_limiter.downloads_per_hour,
+            "bandwidth_gb_per_hour": rate_limiter.bandwidth_gb_per_hour,
+            "websocket_sessions": rate_limiter.websocket_sessions
+        }
+    }
 
 # Startup and shutdown events
 @app.on_event("startup")

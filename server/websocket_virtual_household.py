@@ -1438,6 +1438,31 @@ async def websocket_virtual_user(websocket: WebSocket, user_id: str):
     logger.info(f"🔍 WEBSOCKET_ENDPOINT: WebSocket connection attempt for: {user_id}")
     logger.info(f"🔍 WEBSOCKET_ENDPOINT: WebSocket state: {websocket.client_state}")
     
+    # Rate limiting for WebSocket connections
+    client_ip = "unknown"
+    try:
+        from server.simple_rate_limiter import rate_limiter
+        
+        # Get client IP
+        if websocket.client:
+            client_ip = websocket.client.host
+        
+        # Check WebSocket rate limit
+        allowed, error_msg = rate_limiter.check_websocket_limit(client_ip)
+        if not allowed:
+            logger.warning(f"🛡️ WebSocket rate limit exceeded for {client_ip}: {error_msg}")
+            await websocket.close(code=1008, reason=error_msg)
+            return
+        
+        # Track WebSocket connection
+        rate_limiter.track_websocket_connect(client_ip)
+        logger.info(f"🛡️ WebSocket connection tracked for {client_ip}")
+        
+    except ImportError:
+        logger.warning("⚠️ Rate limiter not available for WebSocket connections")
+    except Exception as e:
+        logger.error(f"❌ Error in WebSocket rate limiting: {e}")
+    
     try:
         logger.info(f"🔍 WEBSOCKET_ENDPOINT: Starting session for {user_id}")
         # Start session
@@ -1567,6 +1592,17 @@ async def websocket_virtual_user(websocket: WebSocket, user_id: str):
         # Clean up session
         logger.info(f"🔍 WEBSOCKET_ENDPOINT: Cleaning up session for {user_id}")
         await session_manager.stop_session(user_id)
+        
+        # Track WebSocket disconnection for rate limiting
+        try:
+            from server.simple_rate_limiter import rate_limiter
+            rate_limiter.track_websocket_disconnect(client_ip)
+            logger.info(f"🛡️ WebSocket disconnection tracked for {client_ip}")
+        except ImportError:
+            pass  # Rate limiter not available
+        except Exception as e:
+            logger.error(f"❌ Error tracking WebSocket disconnection: {e}")
+        
         logger.info(f"🔍 WEBSOCKET_ENDPOINT: Session cleanup complete for {user_id}")
 
 @router.get("/ws/virtual-household/{user_id}")
