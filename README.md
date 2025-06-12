@@ -1,16 +1,118 @@
-# LibreQoS Bufferbloat Test
+# LibreQoS Bufferbloat Test - ISP Installation & Operations Guide
 
-A comprehensive web-based tool for measuring bufferbloat and network performance under realistic load conditions. This project provides both traditional single-user testing and advanced virtual household simulation to evaluate network behavior under real-world usage scenarios.
+Welcome to the LibreQoS Bufferbloat Test platform! This guide will help ISPs and hosting providers set up their own bufferbloat testing server to provide customers with reliable internet connection quality measurement.
+
+## 🌟 What This Provides Your Customers
+
+Your bufferbloat testing server offers customers:
+
+- **Comprehensive Network Quality Testing**: Measures how connections perform under realistic load conditions
+- **Two Testing Modes**: Traditional single-user testing and advanced virtual household simulation
+- **Professional Results**: Clear grading system (A+ to F) with detailed performance metrics
+- **Real-World Scenarios**: Tests gaming, video conferencing, streaming, and background downloads simultaneously
+- **Mobile-Friendly Interface**: Works seamlessly on phones, tablets, and computers
+- **Customer Support Integration**: Enhanced telemetry system for troubleshooting correlation
 
 ## 🚀 What is Bufferbloat?
 
-Bufferbloat occurs when excessive buffering in network equipment causes high latency and poor performance for real-time applications like gaming, video calls, and VoIP. Our test measures how your network connection performs under load, with a focus on latency increases that occur during high bandwidth utilization.
+Bufferbloat occurs when excessive buffering in network equipment causes high latency and poor performance for real-time applications like gaming, video calls, and VoIP. Our test measures how network connections perform under load, with a focus on latency increases that occur during high bandwidth utilization.
 
-## Overview
+## 🔧 Quick Setup Options
 
-The LibreQoS Bufferbloat Test offers two distinct testing modes designed to provide comprehensive network analysis. The system uses a **Simple Multiprocess Architecture** with process isolation for optimal performance and stability.
+Choose the installation method that works best for your infrastructure:
 
-## Test Modes
+### Option 1: Docker Installation (Recommended)
+
+The fastest way to get started with HTTPS support:
+
+```bash
+# 1. Clone the repository
+cd /opt/
+git clone https://github.com/LibreQoE/bufferbloat_test.git libreqos_test
+cd /opt/libreqos_test
+
+# 2. Set up SSL certificates (for production)
+sudo ./setup_ssl_certificates.sh yourdomain.example.com
+
+# 3. Deploy with Docker
+docker-compose -f docker-compose.prod.yml up -d
+```
+
+Your test server will be available at `https://yourdomain.example.com`
+
+### Option 2: Direct Installation
+
+For more control over the server configuration:
+
+```bash
+# 1. Clone and install dependencies
+cd /opt/
+git clone https://github.com/LibreQoE/bufferbloat_test.git libreqos_test
+cd /opt/libreqos_test
+pip install -r server/requirements.txt
+
+# 2. Set up SSL certificates
+sudo ./setup_ssl_certificates.sh yourdomain.example.com
+
+# 3. Install as system service
+sudo ./install_service.sh
+
+# 4. Start the service
+sudo systemctl start libreqos-bufferbloat
+sudo systemctl enable libreqos-bufferbloat
+```
+
+## 🏢 ISP Configuration & Branding
+
+### Display Your Organization Information
+
+Create `/etc/lqos_test.conf` to configure your server's display information:
+
+```bash
+# Your organization/ISP information
+sponsor_name=Your ISP Name
+sponsor_url=https://www.yourisp.com
+sponsor_city=Your City
+
+# Optional webhook for customer support integration
+webhook_url=https://your-portal.example.com/api/speedtest-results
+webhook_secret=your-shared-secret-key
+
+# Optional API key for telemetry endpoint protection
+telemetry_api_key=your-secure-api-key-here
+```
+
+This will display: **"Sponsor: Your ISP Name | Your City"** where your ISP name links to your website.
+
+### Enhanced Telemetry for Customer Support
+
+The system includes advanced telemetry designed specifically for ISP support teams:
+
+- **Local Storage**: 1000 most recent tests stored with full IP addresses for customer correlation
+- **Support APIs**: Query test history for customer troubleshooting
+- **Optional Webhooks**: Integrate with existing ISP portals/systems
+- **Privacy Preserving**: Central server never stores customer IPs
+- **API Authentication**: Secure access to telemetry endpoints
+
+#### Support Team API Endpoints
+
+```bash
+# Get recent tests from all customers
+curl -H "Authorization: Bearer your-api-key" \
+  "https://your-server/api/telemetry/recent?limit=50"
+
+# Get test history for specific customer IP
+curl -H "Authorization: Bearer your-api-key" \
+  "https://your-server/api/telemetry/customer/192.168.1.100"
+
+# Get system statistics
+curl -H "Authorization: Bearer your-api-key" \
+  "https://your-server/api/telemetry/stats"
+```
+
+See [docs/ISP_TELEMETRY_GUIDE.md](docs/ISP_TELEMETRY_GUIDE.md) for complete telemetry documentation.
+
+## 🧪 Test Modes
 
 ### 🧑 Single User Test Mode
 Traditional bufferbloat testing that measures individual connection performance through sequential load phases:
@@ -47,41 +149,7 @@ Advanced simulation that recreates a realistic household environment with multip
   - **Traffic**: 50 Mbps ↓ (continuous) / 2 Mbps ↑ (constant backup)
   - Background bulk data transfers
 
-#### Advanced Features:
-- **Process Isolation**: Each user type runs in dedicated process for maximum stability
-- **Real-time Performance Monitoring**: Live metrics for each virtual user including ping, jitter, and throughput
-- **Realistic Traffic Generation**: Authentic application behavior patterns with burst cycles
-- **WebSocket-based Latency Measurement**: Per-user latency tracking through dedicated connections
-- **Resource Leak Prevention**: Advanced session management with automatic cleanup
-- **Network Fairness Assessment**: Measures bandwidth sharing equity
-- **Bufferbloat Detection**: Real-time severity classification and alerts
-
-## Key Features
-
-### Core Testing Capabilities
-- **Adaptive Warmup System**: Intelligent ramp-up to optimal test speeds
-- **Parameter Discovery**: Automatic detection of connection capabilities
-- **Phase-Based Testing**: Sequential load application with precise timing
-- **Real-Time Latency Measurement**: 500ms interval ping monitoring per virtual user
-- **Comprehensive Throughput Analysis**: Current rate calculation with EMA smoothing
-
-### Advanced Analytics
-- **Bufferbloat Grading**: A+ to F scoring based on latency increase
-- **Statistical Analysis**: Median, average, percentile calculations
-- **Performance Visualization**: Real-time charts and sparklines
-- **Results Sharing**: Exportable test results and screenshots
-- **Enhanced Logging**: Comprehensive debugging and diagnostics
-
-### Technical Architecture
-- **Simple Multiprocess Architecture**: Process isolation with dedicated ports (8001-8004) for each user type
-- **Direct WebSocket Connections**: Optimized 4-18ms connection times with 800+ Mbps aggregate throughput
-- **Real Traffic Generation**: Genuine `os.urandom()` data transfer (no fake traffic)
-- **Resource Management**: Advanced session health tracking with automatic cleanup
-- **Native HTTPS Support**: SSL/TLS without reverse proxy overhead
-- **Health Monitoring**: Automatic process restart and health validation
-- **Responsive Design**: Mobile-friendly interface with dark theme
-
-## Bufferbloat Grading System
+## 📊 Bufferbloat Grading System
 
 The test assigns grades based on additional latency under load:
 
@@ -96,258 +164,228 @@ The test assigns grades based on additional latency under load:
 
 **Virtual Household Mode** provides additional grading for:
 - **Overall Performance**: Combined score across all virtual users
+- **Individual User Performance**: Gaming, Video Calls, Streaming, Background Traffic
 - **Network Fairness**: How equitably bandwidth is distributed
-- **Latency Stability**: Consistency of performance under load
 
-## Architecture Overview
+## 🔒 HTTPS Setup
+
+### Production SSL Certificates (Let's Encrypt)
+
+For a production server accessible to your customers:
+
+```bash
+# Automatic Let's Encrypt setup
+sudo ./setup_ssl_certificates.sh your-test-server.yourdomain.com
+
+# The script will:
+# - Install certbot
+# - Obtain SSL certificates
+# - Configure automatic renewal
+# - Set appropriate permissions
+```
+
+### Development/Testing Certificates
+
+For internal testing or development:
+
+```bash
+# Generate self-signed certificates
+sudo ./create_test_certificates.sh
+
+# Start with HTTPS
+python3 start_simple_multiprocess.py \
+  --ssl-certfile ssl/cert.pem \
+  --ssl-keyfile ssl/key.pem \
+  --port 443
+```
+
+## 🏗️ Architecture Overview
 
 ### Simple Multiprocess Architecture
-- **Capacity**: 30+ concurrent users with process isolation
-- **Process Model**: Dedicated processes for each user type (Jake:8001, Alex:8002, Sarah:8003, Computer:8004)
-- **Memory Usage**: Optimized resource utilization with automatic cleanup
-- **Performance**: 800+ Mbps aggregate throughput, 4-18ms WebSocket latency
-- **Features**:
-  - Complete process isolation for maximum stability
-  - Direct WebSocket connections to dedicated processes
-  - Automatic process health monitoring and restart
-  - Resource leak prevention with session management
-  - Native HTTPS support without proxy overhead
 
-For detailed architecture information, see [`DESIGN.md`](DESIGN.md).
+Your server uses a robust multiprocess architecture designed for ISP-grade performance:
 
-## Project Structure
+- **Main Server (Port 443/8000)**: Handles web interface and coordination
+- **Dedicated Processes (Ports 8001-8004)**: Handle different types of traffic simulation
+- **Ping Server (Port 8005)**: Provides low-latency measurement endpoint
+- **Load Balancer**: Distributes connections efficiently
+- **Health Monitor**: Automatically restarts failed processes
 
-```
-server/
-├── main.py                     # FastAPI application entry point
-├── simple_config.py            # Configuration management
-├── simple_load_balancer.py     # Load balancing for multiple processes
-├── simple_process_manager.py   # Process management and coordination
-├── simple_user_process.py      # Individual user process handling
-├── websocket_virtual_household.py # Virtual household WebSocket with realistic traffic
-├── requirements.txt            # Python dependencies
-└── endpoints/                  # API endpoints
-    ├── download.py             # Download endpoint for downstream saturation
-    ├── ping.py                 # Dedicated ping endpoint for latency measurement
-    └── upload.py               # Upload endpoint for upstream saturation
+**Performance Targets:**
+- **Concurrent Users**: 30+ simultaneous tests with process isolation
+- **Throughput**: 800+ Mbps aggregate across all processes
+- **Response Time**: <500ms test initiation, 4-18ms WebSocket connections
+- **Reliability**: Automatic process restart, health monitoring, and resource leak prevention
 
-client/
-├── index.html                  # Main HTML page with dual-mode interface
-├── style.css                   # Comprehensive CSS styling
-├── app.js                      # Main application logic and mode switching
-├── config.js                   # Client configuration
-├── ui.js                       # User interface management
-├── results.js                  # Results display and analysis
-├── share.js                    # Results sharing functionality
-├── test-netflix-pattern.html   # Netflix traffic pattern testing
-├── test-real-traffic.html      # Real traffic pattern testing
-├── virtualHousehold/
-│   ├── virtualHousehold.js     # Main virtual household controller
-│   ├── uiHousehold.js          # Virtual household UI management
-│   ├── webSocketManager.js     # WebSocket connection management
-│   ├── latencyTracker.js       # Per-user latency tracking
-│   ├── trafficManager.js       # Traffic pattern management
-│   ├── charts/                 # Visualization components
-│   │   └── timelineChart.js    # Timeline chart implementation
-│   └── workers/                # Virtual user traffic workers
-│       ├── workerGamer.js      # Gaming traffic simulation (Alex)
-│       ├── workerZoom.js       # Video conference simulation (Sarah)
-│       ├── workerNetflix.js    # Streaming simulation (Jake)
-│       ├── workerWebSocketUnified.js # Unified WebSocket worker
-│       └── workerDownloaderWebSocket.js # Background downloads (Computer)
-└── [additional monitoring and utility files...]
+This design ensures:
+- **High Performance**: Professional-grade throughput capabilities
+- **Reliability**: Process isolation prevents cascading failures
+- **Scalability**: Supports multiple concurrent customers
+- **Accuracy**: Realistic traffic patterns provide meaningful results
 
-# Configuration and deployment files
-├── install_service.sh          # Systemd service installation
-├── setup_ssl_certificates.sh   # SSL certificate setup
-├── create_test_certificates.sh # Test certificate generation
-├── start_https.sh              # HTTPS server startup
-├── libreqos-bufferbloat.service # Systemd service definition
-└── [additional setup scripts...]
-```
+## 🌐 Server Requirements
 
-## Installation and Setup
+### Minimum Requirements
+- **CPU**: 2 cores, 2.0 GHz
+- **RAM**: 4 GB
+- **Network**: 100 Mbps symmetric connection
+- **OS**: Ubuntu 22.04/24.04 or compatible Linux distribution
 
-### Prerequisites
-- **Server**: Ubuntu Server 22.04 or 24.04 (or any Linux distribution)
-- **Python**: 3.8 or higher
-- **Network**: Sufficient bandwidth for testing (recommended: 100+ Mbps)
+### Recommended for High Traffic
+- **CPU**: 4+ cores, 3.0+ GHz
+- **RAM**: 8+ GB
+- **Network**: 1+ Gbps symmetric connection
+- **Storage**: 20+ GB available space
 
-### Quick Start
+## 🚀 Performance Optimization
 
-1. **Clone the Repository**:
-   ```bash
-   cd /opt/
-   git clone https://github.com/LibreQoE/bufferbloat_test.git libreqos_test
-   cd /opt/libreqos_test
-   ```
-
-2. **Install Dependencies**:
-   ```bash
-   pip install -r server/requirements.txt
-   ```
-
-3. **Run the Server**:
-   ```bash
-   python3 server/main.py
-   ```
-   
-   The server runs on port 80 by default with a dedicated ping server on port 8005.
-
-4. **Access the Test**:
-   ```
-   http://your-server-ip/
-   ```
-
-### Production Deployment
-
-#### Systemd Service Installation
-For production environments, install as a systemd service:
+### Network Configuration
 
 ```bash
-sudo ./install_service.sh
-```
-
-This provides:
-- **Automatic startup** on system boot
-- **Automatic restart** on failure
-- **System journal logging**
-- **Process management** via systemctl
-
-#### Native HTTPS Setup
-Set up secure access with SSL certificates (no reverse proxy needed):
-
-```bash
-# Production setup with Let's Encrypt
-sudo ./setup_ssl_certificates.sh yourdomain.example.com
-
-# Start with HTTPS and HTTP/2 support
-python3 server/main.py \
-  --port 443 \
-  --ssl-keyfile /etc/letsencrypt/live/yourdomain.com/privkey.pem \
-  --ssl-certfile /etc/letsencrypt/live/yourdomain.com/fullchain.pem \
-  --http2 \
-  --production
-```
-
-Or for quick testing with self-signed certificates:
-```bash
-sudo ./create_test_certificates.sh
-sudo ./start_https.sh
-```
-
-Benefits:
-- **Native SSL/TLS encryption** without proxy overhead
-- **Direct process connections** maintain optimal performance
-- **Enhanced security** for production deployments
-
-### Docker Deployment
-
-For containerized deployment, Docker support is available:
-
-#### Quick Start with Docker
-
-```bash
-# Build and run with docker-compose (serves on port 80)
-docker-compose up -d
-
-# Or build manually with custom port mapping
-docker build -t libreqos-bufferbloat .
-docker run -p 80:8000 -p 8001-8004:8001-8004 -p 8005:8005 libreqos-bufferbloat
-```
-
-#### Docker Configuration
-
-The Docker setup includes:
-- **Multi-process support**: All processes run within a single container
-- **Port exposure**: Ports 8000-8004, 8005, and optionally 443
-- **SSL support**: Mount certificates via volumes
-- **Development mode**: Optional source code mounting for live updates
-
-```yaml
-# docker-compose.yml example with SSL
-services:
-  libreqos-bufferbloat:
-    build: .
-    ports:
-      - "8000:8000"
-      - "8001-8004:8001-8004"
-      - "8005:8005"
-      - "443:443"
-    volumes:
-      - ./ssl:/app/ssl:ro
-```
-
-### Configuration Options
-
-#### Multiprocess Configuration
-Configure the multiprocess architecture for optimal performance:
-
-```bash
-# Enable multiprocess mode (recommended for production)
-export VH_ENABLE_MULTIPROCESS=true
-
-# Configure process limits
-export MAX_PROCESSES=8
-export TESTS_PER_PROCESS=12
-```
-
-#### Performance Tuning
-Optimize for high-bandwidth connections:
-
-```bash
-# Kernel parameters for high concurrency
+# Optimize for high concurrency
 echo 'net.core.somaxconn = 65535' >> /etc/sysctl.conf
 echo 'net.ipv4.tcp_max_syn_backlog = 65535' >> /etc/sysctl.conf
 echo 'fs.file-max = 1000000' >> /etc/sysctl.conf
 sysctl -p
 ```
 
-#### Alternative Startup Methods
+### Firewall Configuration
+
 ```bash
-# Simple multiprocess startup
-python3 start_simple_multiprocess.py
+# Allow HTTP and HTTPS traffic
+sudo ufw allow 80/tcp
+sudo ufw allow 443/tcp
 
-# Or use the shell script
-./run_simple_multiprocess.sh
+# Allow test server ports (required for proper operation)
+sudo ufw allow 8000:8005/tcp
 ```
 
-## Configuration
+## 📊 Privacy and Data Handling
 
-### Sponsor Configuration
-ISPs or organizations hosting the test can display their sponsorship by creating `/etc/lqos_test.conf`:
+### Your Customer's Privacy is Protected
 
+- **No Personal Data Collection**: The test does not collect names, emails, or personal information
+- **Local IP Storage**: Customer IP addresses stored locally for support correlation only
+- **Optional Central Reporting**: Anonymized data forwarded to central server (no IPs)
+- **API Access Control**: Optional authentication protects customer data access
+- **Automatic Cleanup**: Local database maintains only 1000 most recent tests
+
+### ISP Support Features
+
+- **Customer Correlation**: Full IP addresses stored locally for support troubleshooting
+- **Webhook Integration**: Optional integration with existing ISP customer portals
+- **API Authentication**: Secure access to telemetry data for authorized support staff
+- **Data Retention**: Configurable retention policies for compliance
+
+### Full Control
+
+As the server operator, you have complete control over:
+- What data (if any) you choose to log locally
+- API access authentication and authorization
+- Customer access and usage policies
+- Integration with your existing support systems
+
+## 📈 Monitoring Your Server
+
+### Health Checks
+
+Monitor your server status:
+
+```bash
+# Check service status
+sudo systemctl status libreqos-bufferbloat
+
+# View recent logs
+sudo journalctl -u libreqos-bufferbloat -f
+
+# Test server health
+curl https://your-server.com/api/health
+
+# Check telemetry system
+curl -H "Authorization: Bearer your-api-key" \
+  https://your-server.com/api/telemetry/stats
 ```
-sponsor_name=Your ISP Name
-sponsor_url=https://your-isp-website.com
+
+### Performance Metrics
+
+Access server statistics:
+- **System Health**: `https://your-server.com/api/health`
+- **Virtual Household Stats**: `https://your-server.com/virtual-household/stats`
+- **Telemetry Statistics**: `https://your-server.com/api/telemetry/stats`
+
+## 🔄 Maintenance
+
+### Updates
+
+Keep your server current:
+
+```bash
+cd /opt/libreqos_test
+git pull origin main
+sudo systemctl restart libreqos-bufferbloat
 ```
 
-When configured, a "Sponsor: Your ISP Name" heading will appear below the test description with a link to your website. If the file doesn't exist or is missing these fields, no sponsor heading is displayed.
+### SSL Certificate Renewal
 
-## Advanced Features
+Let's Encrypt certificates auto-renew, but you can check status:
 
-### Realistic Traffic Generation
-- **Authentic Patterns**: Real application behavior simulation with process isolation
-- **Burst Cycles**: Netflix streaming with buffer management (Jake process)
-- **Gaming Traffic**: Low-latency, consistent flows (Alex process)
-- **Video Conferencing**: Bidirectional real-time streams (Sarah process)
-- **Background Tasks**: Bulk transfers with realistic patterns (Computer process)
+```bash
+# Check certificate status
+sudo certbot certificates
 
-### Real-Time Monitoring
-- **Per-User Metrics**: Individual latency, jitter, and throughput tracking per process
-- **WebSocket Latency**: Dedicated ping/pong through each user's isolated connection
-- **Current Rate Calculation**: 2-second sliding windows with EMA smoothing
-- **Resource Health**: Session management with automatic cleanup
-- **Sparkline Visualization**: Real-time latency charts for each user
+# Test renewal process
+sudo certbot renew --dry-run
+```
 
-### Simple Multiprocess Architecture Features
-- **Complete Process Isolation**: Each user type runs in dedicated process (ports 8001-8004)
-- **Direct Connections**: Optimized WebSocket routing to specific processes
-- **Health Monitoring**: Automatic process restart and health validation
-- **Resource Management**: Advanced session cleanup prevents resource leaks
-- **High Performance**: 800+ Mbps aggregate throughput with 4-18ms latency
+### Telemetry Database Maintenance
 
-## API Endpoints
+The telemetry system automatically maintains the database:
+- Keeps only 1000 most recent tests
+- No manual cleanup required
+- Database typically 10-50MB in size
+
+## 🆘 Support and Troubleshooting
+
+### Common Issues
+
+**Service won't start:**
+```bash
+# Check for port conflicts
+sudo netstat -tulpn | grep :443
+sudo netstat -tulpn | grep :8000
+
+# Check logs for errors
+sudo journalctl -u libreqos-bufferbloat --no-pager
+```
+
+**HTTPS certificate issues:**
+```bash
+# Verify certificate files exist
+ls -la /etc/letsencrypt/live/yourdomain.com/
+
+# Check certificate validity
+openssl x509 -in /etc/letsencrypt/live/yourdomain.com/cert.pem -text -noout
+```
+
+**Telemetry not working:**
+```bash
+# Check database directory permissions
+ls -la /opt/libreqos_data/
+
+# Test telemetry API
+curl -H "Authorization: Bearer your-api-key" \
+  http://localhost:8000/api/telemetry/stats
+```
+
+### Getting Help
+
+- **Documentation**: Check [DESIGN.md](DESIGN.md) for technical details
+- **Telemetry Guide**: See [docs/ISP_TELEMETRY_GUIDE.md](docs/ISP_TELEMETRY_GUIDE.md)
+- **Community**: Join the LibreQoS community forums
+- **Issues**: Report problems on the GitHub repository
+- **Direct Support**: Contact LibreQoS for enterprise support options
+
+## 🔌 API Endpoints
 
 ### Core Testing Endpoints
 - `GET /ping` - Latency measurement endpoint
@@ -361,56 +399,53 @@ When configured, a "Sponsor: Your ISP Name" heading will appear below the test d
 - `GET /virtual-household/health` - Health monitoring
 - `GET /virtual-household/profiles` - Available user profiles
 
+### ISP Support Endpoints (Protected)
+- `GET /api/telemetry/recent` - Recent test results from all customers
+- `GET /api/telemetry/customer/{ip}` - Test history for specific customer IP
+- `GET /api/telemetry/stats` - Telemetry system statistics
+
 ### System Monitoring Endpoints
-- `GET /health` - System health status
-- `GET /metrics` - Performance metrics
-- `GET /status` - Current system status
+- `GET /api/health` - System health status
+- `GET /api/sponsor` - ISP sponsorship configuration
 
-## Performance Targets
+## 🏗️ Project Structure
 
-### Simple Multiprocess Architecture
-- **Concurrent Users**: 30+ simultaneous tests with process isolation
-- **Memory Usage**: Optimized with automatic session cleanup
-- **Process Count**: Fixed 4 user-type processes + main server + ping server
-- **Response Time**: <500ms test initiation, 4-18ms WebSocket connections
-- **Throughput**: 800+ Mbps aggregate across all processes
-- **Reliability**: Automatic process restart, health monitoring, and resource leak prevention
-
-## Troubleshooting
-
-### Common Issues
-- **Port Conflicts**: Ensure ports 80, 443, and 8000-8005 are available
-- **Firewall**: Configure firewall rules for HTTP/HTTPS access and access to ports 8000-8005
-- **Permissions**: Run with appropriate privileges for port binding
-- **Resources**: Ensure sufficient CPU and memory for testing
-
-### Debug Mode
-Enable enhanced logging for troubleshooting:
-```javascript
-window.debugMode = true;
 ```
+server/
+├── main.py                     # FastAPI application entry point
+├── enhanced_telemetry.py       # ISP telemetry system
+├── simple_process_manager.py   # Process management and coordination
+├── simple_user_process.py      # Individual user process handling
+├── websocket_virtual_household.py # Virtual household WebSocket
+├── requirements.txt            # Python dependencies
+└── endpoints/                  # API endpoints
 
-### Log Analysis
-Access comprehensive logs via the Enhanced Logger:
-- **Export Logs**: Download complete diagnostic information
-- **Real-time Stats**: Monitor system performance during tests
-- **Error Tracking**: Detailed error reporting and analysis
+client/
+├── index.html                  # Main HTML page with dual-mode interface
+├── style.css                   # Comprehensive CSS styling
+├── app.js                      # Main application logic
+├── telemetry.js               # Telemetry data collection
+├── virtualHousehold/          # Virtual household components
+└── [additional UI components...]
 
-## Contributing
+docs/
+├── ISP_TELEMETRY_GUIDE.md     # Complete telemetry documentation
+├── DESIGN.md                  # Technical architecture details
+└── [additional documentation...]
 
-This project welcomes contributions for:
-- **New Test Modes**: Additional testing scenarios
-- **Performance Optimization**: Speed and efficiency improvements
-- **Platform Support**: Additional operating system support
-- **Documentation**: Improved guides and examples
-
-## License
-
-This project is open source and available under the GPLv2 License.
+# Configuration and deployment files
+├── install_service.sh          # Systemd service installation
+├── setup_ssl_certificates.sh   # SSL certificate setup
+├── docker-compose.prod.yml     # Production Docker deployment
+└── [additional setup scripts...]
+```
 
 ---
 
-**Built with ❤️ by [LibreQoS](https://libreqos.io)**
+**Ready to provide your customers with professional-grade internet testing?**
 
-For detailed technical documentation, see:
-- [`DESIGN.md`](DESIGN.md) - Complete system design and architecture
+Start with our Quick Setup options above, and refer to the detailed documentation for advanced configuration and telemetry integration.
+
+---
+
+*Built with ❤️ by [LibreQoS](https://libreqos.io) - Empowering ISPs and their customers with transparent internet quality measurement.*

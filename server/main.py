@@ -538,26 +538,51 @@ async def require_valid_token(request: Request) -> dict:
 
 @app.post("/api/telemetry")
 async def submit_telemetry(request: Request):
-    """Submit test results to telemetry system with privacy-preserving ASN lookup"""
-    if not TELEMETRY_AVAILABLE:
-        return JSONResponse({"error": "Telemetry not available"}, status_code=503)
-    
+    """Enhanced telemetry endpoint for ISP servers with local storage and optional webhooks"""
     try:
-        # Get request data
+        # Get request data (same format as existing system)
         data = await request.json()
-        
-        # Get client IP for ASN lookup
         client_ip = request.client.host
+        user_agent = request.headers.get('user-agent', '')
         
-        # Telemetry is always enabled (mandatory)
-        telemetry_enabled = True
+        # Import the enhanced telemetry system
+        from enhanced_telemetry import record_isp_test_result
         
-        # Record the test result
-        test_id = await telemetry_manager.record_test_result(
+        # Record locally with full IP (for ISP support)
+        test_id = await record_isp_test_result(
             data.get('results', {}),
             client_ip,
-            telemetry_enabled
+            user_agent
         )
+        
+        # ALSO forward to central server (without IP) if this is an ISP server
+        # This maintains the existing central telemetry while adding local storage
+        if IS_CENTRAL_SERVER and TELEMETRY_AVAILABLE:
+            # If we're on central server, also use the original telemetry
+            try:
+                await telemetry_manager.record_test_result(
+                    data.get('results', {}),
+                    client_ip,
+                    True  # telemetry_enabled
+                )
+            except Exception as e:
+                logger.warning(f"Central telemetry failed: {e}")
+        elif not IS_CENTRAL_SERVER:
+            # Forward anonymized data to central server for global stats
+            try:
+                import aiohttp
+                central_data = data.copy()
+                # Data is already anonymized by client, just forward it
+                
+                async with aiohttp.ClientSession() as session:
+                    await session.post(
+                        'https://test.libreqos.com/api/telemetry',
+                        json=central_data,
+                        timeout=aiohttp.ClientTimeout(total=5)
+                    )
+                logger.debug("Forwarded anonymized telemetry to central server")
+            except Exception as e:
+                logger.debug(f"Central telemetry forward failed (non-critical): {e}")
         
         return JSONResponse({
             "success": True,
@@ -566,7 +591,95 @@ async def submit_telemetry(request: Request):
         })
         
     except Exception as e:
-        logger.error(f"Error submitting telemetry: {e}")
+        logger.error(f"Error in enhanced telemetry: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+# Helper function for API key authentication
+def verify_telemetry_auth(request: Request) -> bool:
+    """Verify API key for telemetry endpoints"""
+    from enhanced_telemetry import isp_telemetry
+    
+    # Check Authorization header first
+    auth_header = request.headers.get("Authorization", "")
+    if auth_header.startswith("Bearer "):
+        api_key = auth_header[7:]  # Remove "Bearer " prefix
+        return isp_telemetry.verify_api_key(api_key)
+    
+    # Check X-API-Key header
+    api_key = request.headers.get("X-API-Key")
+    if api_key:
+        return isp_telemetry.verify_api_key(api_key)
+    
+    # Check query parameter (less secure, but convenient)
+    api_key = request.query_params.get("api_key")
+    return isp_telemetry.verify_api_key(api_key)
+
+# ISP Support Team Endpoints for Local Telemetry (Protected)
+@app.get("/api/telemetry/recent")
+async def get_recent_tests(request: Request, limit: int = 50):
+    """Get recent test results for ISP support team (requires authentication)"""
+    # Verify authentication
+    if not verify_telemetry_auth(request):
+        return JSONResponse(
+            {"error": "Authentication required. Provide API key via Authorization header, X-API-Key header, or api_key parameter."}, 
+            status_code=401
+        )
+    
+    try:
+        from enhanced_telemetry import isp_telemetry
+        
+        results = isp_telemetry.get_recent_tests(client_ip=None, limit=limit)
+        return JSONResponse({
+            "success": True,
+            "tests": results,
+            "total": len(results),
+            "limit": limit
+        })
+    except Exception as e:
+        logger.error(f"Error getting recent tests: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.get("/api/telemetry/customer/{client_ip}")
+async def get_customer_tests(request: Request, client_ip: str, limit: int = 20):
+    """Get test history for specific customer IP (for support correlation)"""
+    # Verify authentication
+    if not verify_telemetry_auth(request):
+        return JSONResponse(
+            {"error": "Authentication required. Provide API key via Authorization header, X-API-Key header, or api_key parameter."}, 
+            status_code=401
+        )
+    
+    try:
+        from enhanced_telemetry import isp_telemetry
+        
+        tests = isp_telemetry.get_recent_tests(client_ip=client_ip, limit=limit)
+        return JSONResponse({
+            "success": True,
+            "client_ip": client_ip,
+            "tests": tests,
+            "total_tests": len(tests)
+        })
+    except Exception as e:
+        logger.error(f"Error getting customer tests: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.get("/api/telemetry/stats")
+async def get_isp_telemetry_stats(request: Request):
+    """Get ISP telemetry system statistics"""
+    # Verify authentication
+    if not verify_telemetry_auth(request):
+        return JSONResponse(
+            {"error": "Authentication required. Provide API key via Authorization header, X-API-Key header, or api_key parameter."}, 
+            status_code=401
+        )
+    
+    try:
+        from enhanced_telemetry import isp_telemetry
+        
+        stats = isp_telemetry.get_stats()
+        return JSONResponse(stats)
+    except Exception as e:
+        logger.error(f"Error getting telemetry stats: {e}")
         return JSONResponse({"error": str(e)}, status_code=500)
 
 @app.get("/api/sponsor/stats")
