@@ -97,12 +97,21 @@ async def rate_limiting_middleware(request: Request, call_next):
     # Get client IP (handle proxy headers)
     client_ip = get_client_ip(request)
     
+    # Handle CORS preflight requests immediately
+    if request.method == "OPTIONS":
+        response = Response()
+        response.headers["Access-Control-Allow-Origin"] = "*"
+        response.headers["Access-Control-Allow-Methods"] = "*"
+        response.headers["Access-Control-Allow-Headers"] = "*"
+        response.headers["Access-Control-Allow-Credentials"] = "true"
+        return response
+    
     # Check rate limits for download endpoints
     if request.url.path in ["/download", "/netflix-chunk"]:
         allowed, error_msg = rate_limiter.check_download_limit(client_ip)
         if not allowed:
             usage_stats = rate_limiter.get_usage_stats(client_ip)
-            return JSONResponse(
+            response = JSONResponse(
                 status_code=429,
                 content={
                     "error": "Rate limit exceeded",
@@ -111,6 +120,12 @@ async def rate_limiting_middleware(request: Request, call_next):
                     "current_usage": usage_stats
                 }
             )
+            # Add CORS headers manually for rate limit responses
+            response.headers["Access-Control-Allow-Origin"] = "*"
+            response.headers["Access-Control-Allow-Methods"] = "*"
+            response.headers["Access-Control-Allow-Headers"] = "*"
+            response.headers["Access-Control-Allow-Credentials"] = "true"
+            return response
     
     # Process the request
     response = await call_next(request)
