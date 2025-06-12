@@ -1,20 +1,53 @@
 import os
 import asyncio
+import time
 import uvicorn
-from fastapi import FastAPI, Response, Request, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, Response, Request, WebSocket, WebSocketDisconnect, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 import random
 import logging
+from typing import Dict, Optional
+
 
 # Import shared endpoint modules - Always use shared endpoints for consistency
-from endpoints.download import create_download_endpoint, create_netflix_endpoint
-from endpoints.upload import create_upload_endpoint
-from endpoints.ping import create_ping_endpoint
-from endpoints.warmup import router as warmup_router
+from server.endpoints.download import create_download_endpoint, create_netflix_endpoint
+from server.endpoints.upload import create_upload_endpoint
+from server.endpoints.ping import create_ping_endpoint
+from server.endpoints.warmup import router as warmup_router
 SHARED_ENDPOINTS_AVAILABLE = True
+
+# Token system removed - using simple access control
 # Removed obsolete webrtc_concurrent and websocket_bulk_download imports - no longer used in simple multiprocess system
+
+# Import telemetry system
+# Only enable telemetry on the central server (test.libreqos.com)
+import socket
+SERVER_MODE = os.getenv('SERVER_MODE', 'isp')
+IS_CENTRAL_SERVER = (
+    SERVER_MODE == 'central' or 
+    socket.getfqdn() == 'test.libreqos.com' or 
+    os.getenv('ENABLE_TELEMETRY', 'false').lower() == 'true'
+)
+
+if IS_CENTRAL_SERVER:
+    try:
+        from server.telemetry import telemetry_manager
+        TELEMETRY_AVAILABLE = True
+        logger = logging.getLogger(__name__)
+        logger.info("Telemetry system enabled (central server)")
+    except ImportError:
+        TELEMETRY_AVAILABLE = False
+        logger = logging.getLogger(__name__)
+        logger.warning("Telemetry system not available")
+else:
+    TELEMETRY_AVAILABLE = False
+    logger = logging.getLogger(__name__)
+    logger.info("Telemetry disabled (ISP server)")
+
+# Import token authentication system
+# Token authentication and rate limiter removed
 
 # Import Simple Multi-Process Virtual Household System
 SIMPLE_MULTIPROCESS_ENABLED = os.getenv('ENABLE_SIMPLE_MULTIPROCESS', 'true').lower() == 'true'
@@ -42,14 +75,19 @@ logger = logging.getLogger(__name__)
 # Create main FastAPI app
 app = FastAPI(title="LibreQoS Bufferbloat Test")
 
-# Configure CORS
+# Configure CORS - restrict origins for security
+import re
+
+# Remove CORS restrictions entirely for maximum performance
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # For development - restrict in production
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Token system removed for simplicity
 
 # Use shared endpoint modules for main server (same as workers)
 async def setup_main_server_endpoints():
@@ -131,6 +169,27 @@ async def websocket_virtual_user_main(websocket: WebSocket, user_id: str):
     """Main WebSocket endpoint that routes to appropriate user process"""
     logger.info(f"🔀 Direct WebSocket connection request for: {user_id}")
     
+    # Check WebSocket rate limits before accepting connection
+    try:
+        # Create a fake request object to pass to rate limiter
+        # Extract IP from WebSocket connection
+        client_ip = websocket.client.host if websocket.client else "unknown"
+        
+        # Create mock request for rate limiter
+        class MockRequest:
+            def __init__(self, ip):
+                self.client_ip = ip
+                self.headers = {}
+                self.client = type('obj', (object,), {'host': ip})()
+        
+        mock_request = MockRequest(client_ip)
+        await rate_limiter.check_websocket_limit(mock_request)
+        
+    except HTTPException as e:
+        logger.warning(f"WebSocket rate limit exceeded for {user_id} from {client_ip}: {e.detail}")
+        await websocket.close(code=1013, reason="Too many WebSocket connections from your IP")
+        return
+    
     try:
         if SIMPLE_MULTIPROCESS_AVAILABLE and process_manager.is_running():
             # FIXED: Get port and redirect client to dedicated process
@@ -157,6 +216,300 @@ async def websocket_virtual_user_main(websocket: WebSocket, user_id: str):
             await websocket.close(code=1011, reason="Internal error")
         except:
             pass
+    finally:
+        # Always release WebSocket connection when done
+        try:
+            mock_request = type('obj', (object,), {
+                'client': type('obj', (object,), {'host': client_ip})(),
+                'headers': {}
+            })()
+            await rate_limiter.release_websocket_connection(mock_request)
+        except:
+            pass  # Ignore errors in cleanup
+
+@app.get("/api/health")
+async def get_health():
+    """Health check endpoint for the main server"""
+    return JSONResponse({
+        "status": "healthy",
+        "server": "libreqos-main",
+        "version": "1.0.0",
+        "timestamp": int(time.time())
+    })
+
+@app.get("/api/sponsor")
+async def get_sponsor_config():
+    """Get sponsor configuration from /etc/lqos_test.conf"""
+    try:
+        config_path = "/etc/lqos_test.conf"
+        if os.path.exists(config_path):
+            sponsor_name = None
+            sponsor_url = None
+            sponsor_city = None
+            
+            with open(config_path, 'r') as f:
+                for line in f:
+                    line = line.strip()
+                    if line.startswith("sponsor_name="):
+                        sponsor_name = line.split("=", 1)[1].strip()
+                    elif line.startswith("sponsor_url="):
+                        sponsor_url = line.split("=", 1)[1].strip()
+                    elif line.startswith("sponsor_city="):
+                        sponsor_city = line.split("=", 1)[1].strip()
+            
+            if sponsor_name and sponsor_url:
+                return JSONResponse({
+                    "sponsor_name": sponsor_name,
+                    "sponsor_url": sponsor_url,
+                    "sponsor_city": sponsor_city or "Local"
+                })
+        
+        # No sponsor config found
+        return JSONResponse({"sponsor_name": None, "sponsor_url": None, "sponsor_city": None})
+    except Exception as e:
+        logger.error(f"Error reading sponsor config: {e}")
+        return JSONResponse({"sponsor_name": None, "sponsor_url": None, "sponsor_city": None})
+
+# ===== ISP TOKEN ENDPOINTS =====
+
+@app.post("/api/get-test-token")
+async def generate_test_token(request: Request):
+    """Generate token when user clicks Start Test (direct access)"""
+    if not TOKEN_SYSTEM_AVAILABLE:
+        raise HTTPException(503, "Token system not available")
+    
+    try:
+        client_ip = get_client_ip(request)
+        data = await request.json()
+        
+        test_type = data.get('test_type', 'single_user')
+        user_agent = data.get('user_agent', request.headers.get('user-agent', 'unknown'))
+        
+        # Validate test type
+        if test_type not in ['single_user', 'virtual_household']:
+            raise HTTPException(400, "Invalid test_type. Must be 'single_user' or 'virtual_household'")
+        
+        # Get token manager
+        token_mgr = get_token_manager()
+        
+        # Check if user can test (policy enforcement)
+        can_test, reason = token_mgr.can_user_test(client_ip, test_type)
+        if not can_test:
+            raise HTTPException(403, f"Testing not available: {reason}")
+        
+        # Generate token
+        token = token_mgr.issue_token(
+            client_ip=client_ip,
+            test_type=test_type,
+            source="direct",
+            user_agent=user_agent
+        )
+        
+        logger.info(f"🎫 Issued {test_type} token for {client_ip[:8]}... (direct access)")
+        
+        return JSONResponse({
+            "token": token,
+            "expires_in": token_mgr.token_expiry_seconds,
+            "test_type": test_type,
+            "server_id": token_mgr.isp_id
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error generating test token: {e}")
+        raise HTTPException(500, "Failed to generate test token")
+
+@app.post("/api/request-token")
+async def handle_central_token_request(request: Request):
+    """Handle token requests from central server"""
+    if not TOKEN_SYSTEM_AVAILABLE:
+        raise HTTPException(503, "Token system not available")
+    
+    try:
+        # TODO: Add central server authentication in Phase 2
+        # For now, accept all requests for Phase 1 testing
+        
+        data = await request.json()
+        client_ip = data.get("client_ip")
+        test_type = data.get("test_type", "single_user")
+        
+        if not client_ip:
+            raise HTTPException(400, "client_ip required")
+        
+        if test_type not in ['single_user', 'virtual_household']:
+            raise HTTPException(400, "Invalid test_type")
+        
+        # Get token manager
+        token_mgr = get_token_manager()
+        
+        # Check if user can test
+        can_test, reason = token_mgr.can_user_test(client_ip, test_type)
+        if not can_test:
+            raise HTTPException(403, f"Access denied by ISP policy: {reason}")
+        
+        # Generate token
+        token = token_mgr.issue_token(
+            client_ip=client_ip,
+            test_type=test_type,
+            source="central"
+        )
+        
+        logger.info(f"🎫 Issued {test_type} token for {client_ip[:8]}... (central server request)")
+        
+        return JSONResponse({
+            "token": token,
+            "expires_in": token_mgr.token_expiry_seconds,
+            "test_type": test_type,
+            "server_id": token_mgr.isp_id
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error handling central token request: {e}")
+        raise HTTPException(500, "Failed to process token request")
+
+@app.get("/api/token-stats")
+async def get_token_stats():
+    """Get token usage statistics (optional monitoring)"""
+    if not TOKEN_SYSTEM_AVAILABLE:
+        raise HTTPException(503, "Token system not available")
+    
+    try:
+        token_mgr = get_token_manager()
+        stats = token_mgr.get_stats()
+        
+        return JSONResponse({
+            "success": True,
+            "stats": stats,
+            "timestamp": time.time()
+        })
+        
+    except Exception as e:
+        logger.error(f"❌ Error getting token stats: {e}")
+        raise HTTPException(500, "Failed to get token statistics")
+
+@app.delete("/api/revoke-token")
+async def revoke_token(request: Request):
+    """Revoke tokens for debugging/admin purposes"""
+    if not TOKEN_SYSTEM_AVAILABLE:
+        raise HTTPException(503, "Token system not available")
+    
+    try:
+        data = await request.json()
+        client_ip = data.get("client_ip")
+        
+        if not client_ip:
+            raise HTTPException(400, "client_ip required")
+        
+        token_mgr = get_token_manager()
+        revoked_count = token_mgr.revoke_tokens_for_ip(client_ip)
+        
+        return JSONResponse({
+            "success": True,
+            "revoked_count": revoked_count,
+            "message": f"Revoked {revoked_count} tokens for {client_ip}"
+        })
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"❌ Error revoking tokens: {e}")
+        raise HTTPException(500, "Failed to revoke tokens")
+
+# Helper function to get client IP
+def get_client_ip(request: Request) -> str:
+    """Extract client IP from request, handling proxy headers"""
+    # Check for forwarded IP headers (common in proxy setups)
+    forwarded_ip = request.headers.get("x-forwarded-for")
+    if forwarded_ip:
+        # Take the first IP in case of multiple proxies
+        return forwarded_ip.split(",")[0].strip()
+    
+    real_ip = request.headers.get("x-real-ip")
+    if real_ip:
+        return real_ip.strip()
+    
+    # Fall back to direct client IP
+    return request.client.host if request.client else "unknown"
+
+# Token validation middleware
+async def require_valid_token(request: Request) -> dict:
+    """Middleware to validate tokens on all test endpoints"""
+    if not TOKEN_SYSTEM_AVAILABLE:
+        raise HTTPException(503, "Token system not available")
+    
+    token = request.headers.get("X-Session-Token")
+    client_ip = get_client_ip(request)
+    
+    if not token:
+        raise HTTPException(401, "Test session token required. Please start a test to get a token.")
+    
+    token_mgr = get_token_manager()
+    payload = token_mgr.validate_token(token, client_ip)
+    
+    if not payload:
+        raise HTTPException(401, "Invalid or expired test session. Please start a new test.")
+    
+    return payload
+
+@app.post("/api/telemetry")
+async def submit_telemetry(request: Request):
+    """Submit test results to telemetry system with privacy-preserving ASN lookup"""
+    if not TELEMETRY_AVAILABLE:
+        return JSONResponse({"error": "Telemetry not available"}, status_code=503)
+    
+    try:
+        # Get request data
+        data = await request.json()
+        
+        # Get client IP for ASN lookup
+        client_ip = request.client.host
+        
+        # Telemetry is always enabled (mandatory)
+        telemetry_enabled = True
+        
+        # Record the test result
+        test_id = await telemetry_manager.record_test_result(
+            data.get('results', {}),
+            client_ip,
+            telemetry_enabled
+        )
+        
+        return JSONResponse({
+            "success": True,
+            "test_id": test_id,
+            "message": "Test results recorded successfully"
+        })
+        
+    except Exception as e:
+        logger.error(f"Error submitting telemetry: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+@app.get("/api/sponsor/stats")
+async def get_sponsor_stats(days: int = 30):
+    """Get sponsor statistics dashboard data"""
+    if not TELEMETRY_AVAILABLE:
+        return JSONResponse({"error": "Telemetry not available"}, status_code=503)
+    
+    try:
+        stats = await telemetry_manager.get_sponsor_stats(days)
+        return JSONResponse(stats)
+    except Exception as e:
+        logger.error(f"Error getting sponsor stats: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
+
+
+@app.get("/api/rate-limit-stats")
+async def get_rate_limit_stats():
+    """Get rate limiting statistics for monitoring"""
+    try:
+        stats = rate_limiter.get_stats()
+        return JSONResponse(stats)
+    except Exception as e:
+        logger.error(f"Error getting rate limit stats: {e}")
+        return JSONResponse({"error": str(e)}, status_code=500)
 
 @app.get("/virtual-household/stats")
 async def get_virtual_household_stats():
@@ -411,12 +764,12 @@ ping_app = FastAPI(
     version="1.0.0"
 )
 
-# Add CORS middleware to ping server
+# Add CORS middleware to ping server - no restrictions
 ping_app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 
@@ -460,7 +813,7 @@ async def dedicated_ping(request: Request):
 @ping_app.get("/health")
 async def ping_health():
     """Health check endpoint for ping server"""
-    return {"status": "healthy", "server": "ping-dedicated", "port": 8085}
+    return {"status": "healthy", "server": "ping-dedicated", "port": 8005}
 
 @ping_app.get("/")
 async def ping_root():
@@ -468,14 +821,14 @@ async def ping_root():
     return {
         "server": "LibreQoS Dedicated Ping Server",
         "purpose": "Isolated latency measurements",
-        "port": 8085,
+        "port": 8005,
         "endpoints": {
             "/ping": "Latency measurement endpoint",
             "/health": "Health check",
         }
     }
 
-async def run_ping_server(port=8085, ssl_keyfile=None, ssl_certfile=None):
+async def run_ping_server(port=8005, ssl_keyfile=None, ssl_certfile=None):
     """Run the dedicated ping server with optional HTTPS support"""
     config_kwargs = {
         "app": ping_app,
@@ -540,13 +893,13 @@ async def run_both_servers(args):
     """Run both the main server and dedicated ping server concurrently"""
     logger.info("Starting LibreQoS Bufferbloat Test with dedicated ping server")
     logger.info(f"Main server: port {args.port}")
-    logger.info("Ping server: port 8085 (isolated for accurate latency measurements)")
+    logger.info("Ping server: port 8005 (isolated for accurate latency measurements)")
     
     # Run both servers concurrently
     # Pass SSL certificates to ping server if available
     await asyncio.gather(
         run_main_server(args),
-        run_ping_server(8085, args.ssl_keyfile, args.ssl_certfile)
+        run_ping_server(8005, args.ssl_keyfile, args.ssl_certfile)
     )
 
 if __name__ == "__main__":

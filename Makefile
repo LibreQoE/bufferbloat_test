@@ -93,7 +93,7 @@ health:
 	@echo "Main server:"
 	@curl -sf http://localhost:8000/health && echo " ✅ OK" || echo " ❌ FAILED"
 	@echo "Ping server:"
-	@curl -sf http://localhost:8085/ping && echo " ✅ OK" || echo " ❌ FAILED"
+	@curl -sf http://localhost:8005/ping && echo " ✅ OK" || echo " ❌ FAILED"
 	@echo "Jake process:"
 	@curl -sf http://localhost:8001/health && echo " ✅ OK" || echo " ❌ FAILED"
 	@echo "Alex process:"

@@ -12,13 +12,6 @@ echo "=================================================="
 USERNAME=$(whoami)
 echo "📋 Detected username: $USERNAME"
 
-# Check if running as root
-if [ "$EUID" -eq 0 ]; then
-    echo "❌ Error: Do not run this script as root"
-    echo "   Run as your regular user account that will run the service"
-    exit 1
-fi
-
 # Check if service file exists
 if [ ! -f "libreqos-bufferbloat.service" ]; then
     echo "❌ Error: libreqos-bufferbloat.service file not found"

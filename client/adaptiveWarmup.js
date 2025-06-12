@@ -8,6 +8,7 @@
 import StreamManager from './streamManager.js';
 import throughputTracker from './throughputTracker.js';
 import { updateSpeedEstimationStatus, updateParameterOptimizationStatus, updateOptimizationCompleteStatus } from './testStatusDisplay.js';
+import { serverDiscovery } from './discovery.js';
 import { generateTestData as xoshiroGenerateTestData, getPooledTestData } from './xoshiro.js';
 
 /**
@@ -262,7 +263,7 @@ class AdaptiveWarmup {
                 let lastDownloadReport = startTime;
                 
                 try {
-                    const response = await fetch('/download', {
+                    const response = await serverDiscovery.makeRequest('/download', {
                         method: 'GET',
                         signal,
                         cache: 'no-store',
@@ -344,7 +345,7 @@ class AdaptiveWarmup {
                     if (bytesTransferred === 0) {
                         console.warn(`⚠️ No data received from /download endpoint during speed test`);
                         // Try a fallback approach with a smaller request
-                        const fallbackResponse = await fetch('/download?size=1048576', { // 1MB fallback
+                        const fallbackResponse = await serverDiscovery.makeRequest('/download?size=1048576', { // 1MB fallback
                             method: 'GET',
                             cache: 'no-store',
                             headers: {
@@ -366,7 +367,7 @@ class AdaptiveWarmup {
                         console.error(`❌ Download speed test error:`, error);
                         // Try a simple fallback
                         try {
-                            const fallbackResponse = await fetch('/download?size=1048576');
+                            const fallbackResponse = await serverDiscovery.makeRequest('/download?size=1048576');
                             if (fallbackResponse.ok) {
                                 const fallbackData = await fallbackResponse.arrayBuffer();
                                 bytesTransferred = fallbackData.byteLength;
@@ -419,7 +420,7 @@ class AdaptiveWarmup {
                                 const controller = new AbortController();
                                 const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 seconds per chunk for ultra-high-speed
                                 
-                                const response = await fetch('/upload', {
+                                const response = await serverDiscovery.makeRequest('/upload', {
                                     method: 'POST',
                                     signal: controller.signal,
                                     headers: createUploadHeaders({

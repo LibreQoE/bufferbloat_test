@@ -11,6 +11,16 @@ import random
 import logging
 from fastapi import Request, Response
 
+# Import rate limiter
+from server.rate_limiter import rate_limiter
+
+# Import authentication if available
+try:
+    from server.token_auth import validate_request
+    AUTH_AVAILABLE = True
+except ImportError:
+    AUTH_AVAILABLE = False
+
 async def create_ping_endpoint(app, logger_prefix: str = ""):
     """
     Create ping endpoint that can be used by any FastAPI app.
@@ -29,7 +39,22 @@ async def create_ping_endpoint(app, logger_prefix: str = ""):
         
         Prioritizes response when X-Priority header is set to 'high'.
         Implements special handling for consecutive timeouts.
+        Protected by rate limiting to prevent ping flooding.
+        
+        Requires authentication token for access.
         """
+        # Check rate limits before processing ping
+        await rate_limiter.check_ping_limit(request)
+        
+        # Validate authentication if available
+        if AUTH_AVAILABLE:
+            try:
+                payload = await validate_request(request)
+                if payload:
+                    logger.info(f"{logger_prefix}Authenticated ping from {request.client.host}")
+            except Exception as e:
+                logger.warning(f"{logger_prefix}Ping authentication failed: {e}")
+                raise
         # Check if this is a high priority request
         is_high_priority = request.headers.get("X-Priority") == "high"
         

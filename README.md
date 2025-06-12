@@ -192,7 +192,7 @@ client/
    python3 server/main.py
    ```
    
-   The server runs on port 80 by default with a dedicated ping server on port 8085.
+   The server runs on port 80 by default with a dedicated ping server on port 8005.
 
 4. **Access the Test**:
    ```
@@ -254,14 +254,14 @@ docker-compose up -d
 
 # Or build manually with custom port mapping
 docker build -t libreqos-bufferbloat .
-docker run -p 80:8000 -p 8001-8004:8001-8004 -p 8085:8085 libreqos-bufferbloat
+docker run -p 80:8000 -p 8001-8004:8001-8004 -p 8005:8005 libreqos-bufferbloat
 ```
 
 #### Docker Configuration
 
 The Docker setup includes:
 - **Multi-process support**: All processes run within a single container
-- **Port exposure**: Ports 8000-8004, 8085, and optionally 443
+- **Port exposure**: Ports 8000-8004, 8005, and optionally 443
 - **SSL support**: Mount certificates via volumes
 - **Development mode**: Optional source code mounting for live updates
 
@@ -273,7 +273,7 @@ services:
     ports:
       - "8000:8000"
       - "8001-8004:8001-8004"
-      - "8085:8085"
+      - "8005:8005"
       - "443:443"
     volumes:
       - ./ssl:/app/ssl:ro
@@ -312,6 +312,18 @@ python3 start_simple_multiprocess.py
 # Or use the shell script
 ./run_simple_multiprocess.sh
 ```
+
+## Configuration
+
+### Sponsor Configuration
+ISPs or organizations hosting the test can display their sponsorship by creating `/etc/lqos_test.conf`:
+
+```
+sponsor_name=Your ISP Name
+sponsor_url=https://your-isp-website.com
+```
+
+When configured, a "Sponsor: Your ISP Name" heading will appear below the test description with a link to your website. If the file doesn't exist or is missing these fields, no sponsor heading is displayed.
 
 ## Advanced Features
 

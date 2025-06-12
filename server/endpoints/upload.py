@@ -12,6 +12,9 @@ import time
 from fastapi import Request, Response, HTTPException
 from fastapi.responses import JSONResponse
 
+# Import rate limiter
+from server.rate_limiter import rate_limiter
+
 # Constants for rate limiting and size control
 MAX_CHUNK_SIZE = 8 * 1024 * 1024  # Process in 8MB chunks max (optimized for ultra-high-speed)
 MAX_REQUEST_SIZE = 512 * 1024 * 1024  # 512MB max per request (optimized for high-speed uploads)
@@ -35,8 +38,11 @@ async def create_upload_endpoint(app, logger_prefix: str = "", traffic_pattern: 
         Used to saturate the upload connection.
         
         Includes rate limiting and size checks to prevent server overload
-        on high-capacity connections.
+        on high-capacity connections. Protected by DDOS rate limiting.
         """
+        # Check rate limits before processing upload
+        await rate_limiter.check_upload_limit(request)
+        
         try:
             # Initialize counters and rate limiting
             size = 0
@@ -128,3 +134,6 @@ async def create_upload_endpoint(app, logger_prefix: str = "", traffic_pattern: 
                 status_code=500,
                 content={"error": str(e)}
             )
+        finally:
+            # Always release the upload connection when done
+            await rate_limiter.release_upload_connection(request)

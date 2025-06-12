@@ -138,16 +138,29 @@ function createDebugModeToggle() {
 /**
  * Handle start button click
  */
-function onStartButtonClick() {
+async function onStartButtonClick() {
     // Disable the button during the test
     startButton.disabled = true;
     
-    // Hide any previous results
-    document.getElementById('results').classList.add('hidden');
-    
-    // Notify that the test is starting
-    const startEvent = new CustomEvent('test:start');
-    window.dispatchEvent(startEvent);
+    try {
+        // Token system removed for simplicity
+        
+        // Hide any previous results
+        document.getElementById('results').classList.add('hidden');
+        
+        // Notify that the test is starting
+        const startEvent = new CustomEvent('test:start');
+        window.dispatchEvent(startEvent);
+        
+    } catch (error) {
+        console.error('❌ Failed to obtain test token:', error);
+        
+        // Re-enable the button on error
+        startButton.disabled = false;
+        
+        // Show error message to user
+        alert(`Failed to start test: ${error.message}\n\nPlease try again in a moment.`);
+    }
 }
 
 /**

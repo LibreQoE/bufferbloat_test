@@ -13,7 +13,7 @@ services:
       # HTTPS (optional)
       - "443:443"
       # Ping server
-      - "8085:8085"
+      - "8005:8005"
       # User process servers
       - "8001:8001"
       - "8002:8002"

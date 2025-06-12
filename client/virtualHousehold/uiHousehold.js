@@ -7,6 +7,7 @@
 import { displayUnifiedResults, initializeInteractiveFeatures, cleanupResults } from '../shared/testResults.js';
 import { createVirtualHouseholdAdapter } from '../shared/resultAdapters.js';
 import { determineGrade, calculateTotalGrade } from '../shared/gradeCalculations.js';
+import { telemetryManager } from '../telemetry.js';
 
 // Logging control - set to false to reduce console spam for production
 const VERBOSE_LOGGING = false;
@@ -105,7 +106,7 @@ class UIHousehold {
                 activity: 'High-speed downloads (speed auto-detected)',
                 icon: '🎮',
                 color: '#7B6B5B', // Brown theme for Utility Room
-                targetDownload: 200.0, // Mbps - will be updated by Phase 1 speed detection
+                targetDownload: 1000.0, // Mbps - will be updated by Phase 1 speed detection
                 targetUpload: 0.1,    // Mbps - minimal upload (100 Kbps)
                 activityType: 'bulk_transfer',
                 thresholds: { latency: 5000, jitter: 100 },
@@ -286,10 +287,13 @@ class UIHousehold {
         }
     }
     
-    startTest() {
+    async startTest() {
         if (this.testRunning) return;
         
         console.log('🏠 UI BUTTON CLICKED: Starting MANDATORY two-phase Virtual Household test (Adaptive + Household)');
+        
+        // Token system removed for simplicity
+        
         if (VERBOSE_LOGGING) {
             console.log('🔍 DEBUG: this:', this);
             console.log('🔍 DEBUG: this.virtualHousehold:', this.virtualHousehold);
@@ -1621,6 +1625,9 @@ class UIHousehold {
             
             console.log('✅ Virtual Household Test results displayed with shared system');
             
+            // Submit telemetry data
+            this.submitTelemetryData(results);
+            
         } catch (error) {
             console.error('❌ Error displaying Virtual Household results with shared system:', error);
             console.error('❌ Error stack:', error.stack);
@@ -1647,16 +1654,7 @@ class UIHousehold {
             this.elements.overallGrade.className = `grade grade-${overall.overallGrade.toLowerCase()}`;
         }
         
-        // Update metrics - convert letter grades to percentages for display
-        if (this.elements.networkFairness && overall.fairness) {
-            const fairnessPercent = this.convertGradeToPercent(overall.fairness);
-            this.elements.networkFairness.textContent = `${fairnessPercent}% (${overall.fairness})`;
-        }
-        
-        if (this.elements.latencyStability && overall.stability) {
-            const stabilityPercent = this.convertGradeToPercent(overall.stability);
-            this.elements.latencyStability.textContent = `${stabilityPercent}% (${overall.stability})`;
-        }
+        // SIMPLIFIED: No fairness/stability metrics to display
         
         // Update recommendations
         if (results.recommendations) {
@@ -2494,6 +2492,78 @@ class UIHousehold {
     showResults(results) {
         console.log('🏠 Showing results:', results);
         this.displayResults(results);
+    }
+    
+    submitTelemetryData(results) {
+        try {
+            // Extract key metrics from virtual household results
+            const overall = results.overall || {};
+            const users = results.users || {};
+            
+            // Calculate average metrics across all users
+            let totalLatency = 0;
+            let latencyCount = 0;
+            let totalThroughput = 0;
+            let throughputCount = 0;
+            
+            for (const [userId, userData] of Object.entries(users)) {
+                if (userData.metrics && userData.metrics.length > 0) {
+                    const avgMetrics = this.calculateAverageMetrics(userData.metrics);
+                    if (avgMetrics.latency) {
+                        totalLatency += avgMetrics.latency;
+                        latencyCount++;
+                    }
+                    if (avgMetrics.downloadThroughput) {
+                        totalThroughput += avgMetrics.downloadThroughput / 1000000; // Convert to Mbps
+                        throughputCount++;
+                    }
+                }
+            }
+            
+            const telemetryData = {
+                testType: 'household',
+                grades: {
+                    // SIMPLIFIED: Only overall grade (based on Alex + Sarah average)
+                    overall: overall.overallGrade || 'F',
+                    alex: results.users?.alex?.grade || 'F',
+                    sarah: results.users?.sarah?.grade || 'F'
+                },
+                baselineLatency: latencyCount > 0 ? Math.round(totalLatency / latencyCount) : 0,
+                downloadThroughput: throughputCount > 0 ? Math.round((totalThroughput / throughputCount) * 10) / 10 : 0,
+                uploadThroughput: 0, // Virtual household doesn't have a single upload metric
+                testDuration: 30 // Virtual household test duration
+            };
+            
+            telemetryManager.submitResults(telemetryData).then(result => {
+                console.log('Virtual Household telemetry submission result:', result);
+            }).catch(error => {
+                console.error('Virtual Household telemetry submission error:', error);
+            });
+            
+        } catch (error) {
+            console.error('Error preparing virtual household telemetry data:', error);
+        }
+    }
+    
+    calculateAverageMetrics(metrics) {
+        const sums = {};
+        const counts = {};
+        
+        for (const metric of metrics) {
+            for (const [key, value] of Object.entries(metric)) {
+                if (typeof value === 'number') {
+                    sums[key] = (sums[key] || 0) + value;
+                    counts[key] = (counts[key] || 0) + 1;
+                }
+            }
+        }
+        
+        const averages = {};
+        for (const key of Object.keys(sums)) {
+            averages[key] = sums[key] / counts[key];
+        }
+        
+        return averages;
     }
 }
 

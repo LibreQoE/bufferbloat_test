@@ -222,7 +222,7 @@ sudo ./start_https.sh
 
 | Endpoint | Method | Purpose | Server |
 |----------|--------|---------|---------|
-| `/ping` | GET | Latency measurement | Dedicated ping server :8085 |
+| `/ping` | GET | Latency measurement | Dedicated ping server :8005 |
 | `/download` | GET | Download saturation | Main server :8000 |
 | `/upload` | POST | Upload saturation | Main server :8000 |
 | `/ws/bulk-download` | WebSocket | High-performance downloads | Main server :8000 |

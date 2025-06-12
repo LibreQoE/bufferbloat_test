@@ -14,6 +14,9 @@ import time
 from fastapi import Request, Response
 from fastapi.responses import StreamingResponse
 
+# Import rate limiter
+from server.rate_limiter import rate_limiter
+
 # Create a reusable buffer of random data (128KB for higher throughput)
 CHUNK_SIZE = 128 * 1024  # 128KB chunks
 random_buffer = os.urandom(CHUNK_SIZE)
@@ -85,17 +88,25 @@ async def create_download_endpoint(app, logger_prefix: str = "", traffic_pattern
     async def download_endpoint(request: Request):
         """
         Endpoint that streams random data to saturate the download connection.
+        Protected by rate limiting to prevent DDOS.
         """
+        # Check rate limits before starting download
+        await rate_limiter.check_download_limit(request)
+        
         logger.info(f"{logger_prefix}Starting download stream")
         
-        return StreamingResponse(
-            download_generator(request, logger_prefix, traffic_pattern),
-            media_type="application/octet-stream",
-            headers={
-                "Cache-Control": "no-store",
-                "Pragma": "no-cache"
-            }
-        )
+        try:
+            return StreamingResponse(
+                download_generator(request, logger_prefix, traffic_pattern),
+                media_type="application/octet-stream",
+                headers={
+                    "Cache-Control": "no-store",
+                    "Pragma": "no-cache"
+                }
+            )
+        finally:
+            # Always release the connection when done
+            await rate_limiter.release_download_connection(request)
 
 def generate_netflix_chunk(chunk_size: int, quality: str, sequence: int, request_data: dict, logger_prefix: str = ""):
     """Generate Netflix-style chunk with proper headers"""
@@ -167,7 +178,11 @@ async def create_netflix_endpoint(app, logger_prefix: str = "", burst_mode: bool
         """
         Endpoint that serves Netflix-style video chunks.
         Supports variable chunk sizes for adaptive streaming simulation.
+        Protected by download rate limiting.
         """
+        # Use download rate limiting for Netflix chunks
+        await rate_limiter.check_download_limit(request)
+        
         try:
             # Parse request data
             request_data = await request.json()
@@ -204,3 +219,6 @@ async def create_netflix_endpoint(app, logger_prefix: str = "", burst_mode: bool
                 content=b"Error serving chunk",
                 status_code=500
             )
+        finally:
+            # Always release the connection when done
+            await rate_limiter.release_download_connection(request)

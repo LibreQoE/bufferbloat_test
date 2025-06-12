@@ -170,7 +170,7 @@ class VirtualHousehold {
                 description: 'Continuous high-speed downloads',
                 activity: 'Game Updates',
                 color: '#45b7d1',
-                targetDownload: 200.0, // Mbps - continuous high-speed download
+                targetDownload: 1000.0, // Mbps - adaptive high-speed download (will be updated by speed detection)
                 targetUpload: 0.1,    // Mbps - minimal upload (100 Kbps)
                 activityType: 'bulk_transfer',
                 connectionType: 'websocket',
@@ -272,8 +272,21 @@ class VirtualHousehold {
             console.log('🔧 ADAPTIVE DEBUG: Starting sendAdaptiveUpdate with speed:', downloadSpeed);
             
             // FIXED: Send POST directly to Computer process on port 8004
-            const protocol = window.location.protocol;
-            const hostname = window.location.hostname;
+            // Import server discovery to get the correct server URL
+            const { serverDiscovery } = await import('../discovery.js');
+            
+            // For distributed architecture, use discovered server's hostname
+            let hostname, protocol;
+            if (serverDiscovery.currentServer) {
+                const serverUrl = new URL(serverDiscovery.currentServer.url);
+                hostname = serverUrl.hostname;
+                protocol = serverUrl.protocol;
+            } else {
+                // Fallback to current location
+                protocol = window.location.protocol;
+                hostname = window.location.hostname;
+            }
+            
             const computerPort = 8004; // Computer process port
             const adaptiveUpdateUrl = `${protocol}//${hostname}:${computerPort}/update-profile`;
             
@@ -549,7 +562,18 @@ class VirtualHousehold {
                 this.logger.log(`🔧 Initializing dedicated connection for ${userId}...`);
                 
                 // Step 1: Get redirect information from main server (but don't create session)
-                const redirectUrl = `${window.location.protocol}//${window.location.host}/ws/virtual-household/${userId}`;
+                // Import server discovery to get the correct server URL
+                const { serverDiscovery } = await import('../discovery.js');
+                
+                // Use discovered server for WebSocket connections
+                let baseUrl;
+                if (serverDiscovery.currentServer) {
+                    baseUrl = serverDiscovery.currentServer.url;
+                } else {
+                    baseUrl = `${window.location.protocol}//${window.location.host}`;
+                }
+                
+                const redirectUrl = `${baseUrl}/ws/virtual-household/${userId}`;
                 this.logger.log(`🔀 Getting redirect info from: ${redirectUrl}`);
                 
                 const response = await fetch(redirectUrl);
@@ -565,7 +589,10 @@ class VirtualHousehold {
                 }
                 
                 // Step 2: Connect directly to the dedicated user process WebSocket
-                const wsUrl = redirectInfo.websocket_url;
+                let wsUrl = redirectInfo.websocket_url;
+                
+                // Token authentication removed
+                
                 this.logger.log(`🌐 Connecting to dedicated ${userId} connection: ${wsUrl}`);
                 this.logger.log(`🔍 DEBUG: Dedicated WebSocket URL for ${userId}: ${wsUrl}`);
                 this.logger.log(`🔍 DEBUG: Port: ${redirectInfo.port}, Architecture: ${redirectInfo.architecture}`);
@@ -773,11 +800,11 @@ class VirtualHousehold {
                 stats.smoothing = {
                     downloadEMA: 0,           // Exponential moving average for download
                     uploadEMA: 0,             // Exponential moving average for upload
-                    alpha: 0.3,               // Smoothing factor (0.3 = moderate smoothing)
+                    alpha: 0.3,               // UI SMOOTHING: Smooth display (0.3 = more smooth, 0.7 = more responsive)
                     lastUpdateTime: now,
                     bytesInInterval: { download: 0, upload: 0 },
                     intervalStart: now,
-                    intervalDuration: 1000    // 1 second measurement intervals
+                    intervalDuration: 500     // THROUGHPUT FIX: 500ms intervals for more responsive measurement
                 };
             }
             
@@ -789,10 +816,12 @@ class VirtualHousehold {
             let instantDownloadRate = 0;
             let instantUploadRate = 0;
             
-            if (intervalElapsed >= 1.0) { // Complete 1-second interval
+            // THROUGHPUT MEASUREMENT FIX: Allow shorter intervals and convert bytes to Mbps properly
+            if (intervalElapsed >= 0.5) { // Allow 500ms intervals for more responsive measurement
                 if (intervalElapsed > 0) {
-                    instantDownloadRate = smoothing.bytesInInterval.download / intervalElapsed;
-                    instantUploadRate = smoothing.bytesInInterval.upload / intervalElapsed;
+                    // Convert bytes per second to Mbps: (bytes/sec * 8 bits/byte) / 1,000,000
+                    instantDownloadRate = (smoothing.bytesInInterval.download * 8) / (intervalElapsed * 1000000);
+                    instantUploadRate = (smoothing.bytesInInterval.upload * 8) / (intervalElapsed * 1000000);
                 }
                 
                 // Apply exponential moving average for smooth readings
@@ -817,9 +846,9 @@ class VirtualHousehold {
                 const smoothedDownload = smoothing.downloadEMA;
                 const smoothedUpload = smoothing.uploadEMA;
                 
-                // Only emit if values have changed significantly (reduces UI flicker)
-                const downloadChanged = Math.abs(smoothedDownload - (stats.lastDownloadThroughput || 0)) > 50000; // 0.05 Mbps threshold
-                const uploadChanged = Math.abs(smoothedUpload - (stats.lastUploadThroughput || 0)) > 50000;
+                // THROUGHPUT FIX: Update thresholds for Mbps values instead of bytes per second
+                const downloadChanged = Math.abs(smoothedDownload - (stats.lastDownloadThroughput || 0)) > 0.1; // 0.1 Mbps threshold
+                const uploadChanged = Math.abs(smoothedUpload - (stats.lastUploadThroughput || 0)) > 0.1;
                 
                 if (downloadChanged || uploadChanged || smoothedDownload > 0 || smoothedUpload > 0) {
                     // Update stored values
@@ -827,20 +856,20 @@ class VirtualHousehold {
                     stats.lastUploadThroughput = smoothedUpload;
                     stats.lastThroughputUpdate = now;
                     
-                    // Emit traffic update with smoothed throughput
+                    // THROUGHPUT FIX: Convert Mbps to bps for UI compatibility
                     window.dispatchEvent(new CustomEvent('traffic-update', {
                         detail: {
                             userId,
-                            downloadThroughput: smoothedDownload,
-                            uploadThroughput: smoothedUpload,
-                            status: smoothedDownload > 50000 || smoothedUpload > 50000 ? 'active' : 'idle', // 0.05 Mbps threshold
+                            downloadThroughput: smoothedDownload * 1000000, // Convert Mbps to bps for UI
+                            uploadThroughput: smoothedUpload * 1000000,     // Convert Mbps to bps for UI
+                            status: smoothedDownload > 0.1 || smoothedUpload > 0.1 ? 'active' : 'idle', // 0.1 Mbps threshold
                             timestamp: now
                         }
                     }));
                     
-                    // Log significant throughput updates (less verbose)
-                    if (smoothedDownload > 500000 || smoothedUpload > 500000) { // > 0.5 Mbps
-                        this.logger.log(`📈 ${userId} smoothed: ↓${(smoothedDownload/1000000).toFixed(1)} Mbps, ↑${(smoothedUpload/1000000).toFixed(1)} Mbps`);
+                    // THROUGHPUT FIX: Log throughput in Mbps (values are already in Mbps now)
+                    if (smoothedDownload > 0.5 || smoothedUpload > 0.5) { // > 0.5 Mbps
+                        this.logger.log(`📈 ${userId} smoothed: ↓${smoothedDownload.toFixed(1)} Mbps, ↑${smoothedUpload.toFixed(1)} Mbps`);
                     }
                 }
             }
@@ -1558,6 +1587,43 @@ class VirtualHousehold {
             
             this.websocketConnections.clear();
             console.log('🧹 WebSocket connections map cleared');
+            if (this.logger && this.logger.log) this.logger.log('🧹 WebSocket connections map cleared');
+            
+            // TRAFFIC CONTINUATION FIX: Send immediate HTTP stop signal to server
+            try {
+                console.log('🛑 IMMEDIATE STOP: Sending HTTP stop signal to prevent traffic continuation');
+                if (this.logger && this.logger.log) this.logger.log('🛑 IMMEDIATE STOP: Sending HTTP stop signal to prevent traffic continuation');
+                
+                const { serverDiscovery } = await import('../discovery.js');
+                
+                // DISTRIBUTED ARCHITECTURE FIX: Always send stop signals to CENTRAL server
+                // Central server will then relay the stop signal to the appropriate ISP server
+                // This ensures proper session management without affecting other users
+                const stopUrl = `https://test.libreqos.com/api/virtual-household/stop-user-sessions/${this.testStartTime ? Math.floor(this.testStartTime / 1000).toString() : 'all'}`;
+                
+                const stopResponse = await fetch(stopUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        action: 'stop_all_sessions', 
+                        reason: 'test_completed_immediate',
+                        timestamp: Date.now()
+                    })
+                });
+                
+                if (stopResponse.ok) {
+                    const result = await stopResponse.json();
+                    console.log('✅ IMMEDIATE STOP: Server stop signal successful:', result);
+                    if (this.logger && this.logger.log) this.logger.log('✅ IMMEDIATE STOP: Server stop signal successful: ' + JSON.stringify(result));
+                } else {
+                    console.warn('⚠️ IMMEDIATE STOP: Server stop signal failed:', stopResponse.status);
+                    if (this.logger && this.logger.warn) this.logger.warn('⚠️ IMMEDIATE STOP: Server stop signal failed: ' + stopResponse.status);
+                }
+            } catch (error) {
+                console.warn('⚠️ IMMEDIATE STOP: Error sending stop signal:', error.message);
+                if (this.logger && this.logger.warn) this.logger.warn('⚠️ IMMEDIATE STOP: Error sending stop signal: ' + error.message);
+            }
+            
 // ARCHITECTURE FIX: Send stop signals directly to the separate processes (ports 8001-8004)
             // The main server (port 8000) doesn't have the actual WebSocket sessions
             // Store session info before clearing connections
@@ -1571,21 +1637,37 @@ class VirtualHousehold {
                 console.log(`🛑 ARCHITECTURE FIX: Sending stop signals directly to separate processes`);
                 if (this.logger && this.logger.log) this.logger.log(`🛑 ARCHITECTURE FIX: Sending stop signals directly to separate processes`);
                 
-                // Send stop signals to each user's dedicated process
-                const stopPromises = [];
-                const userPorts = {
-                    'alex': 8001,
-                    'sarah': 8002, 
-                    'jake': 8003,
-                    'computer': 8004
-                };
+                // DISTRIBUTED ARCHITECTURE FIX: Check if we're using distributed or local architecture
+                const { serverDiscovery } = await import('../discovery.js');
+                const isDistributedMode = serverDiscovery.currentServer && 
+                    !serverDiscovery.currentServer.url.includes('localhost') && 
+                    !serverDiscovery.currentServer.url.includes('127.0.0.1');
                 
-                for (const session of sessionInfo) {
-                    const port = userPorts[session.userType];
+                const stopPromises = [];
+                
+                if (isDistributedMode) {
+                    // Distributed mode: send one stop signal to main server for all sessions
+                    console.log(`🔍 DISTRIBUTED MODE: Sending single stop signal for all sessions`);
+                    if (this.logger && this.logger.log) this.logger.log(`🔍 DISTRIBUTED MODE: Sending single stop signal for all sessions`);
                     
-                    if (port) {
-                        const stopPromise = this.sendStopSignalToProcess(session.userType, port, session.userId);
-                        stopPromises.push(stopPromise);
+                    const stopPromise = this.sendStopSignalToDistributedServer();
+                    stopPromises.push(stopPromise);
+                } else {
+                    // Local multiprocess mode: send stop signals to each user's dedicated process
+                    const userPorts = {
+                        'alex': 8001,
+                        'sarah': 8002, 
+                        'jake': 8003,
+                        'computer': 8004
+                    };
+                    
+                    for (const session of sessionInfo) {
+                        const port = userPorts[session.userType];
+                        
+                        if (port) {
+                            const stopPromise = this.sendStopSignalToProcess(session.userType, port, session.userId);
+                            stopPromises.push(stopPromise);
+                        }
                     }
                 }
                 
@@ -1659,6 +1741,71 @@ class VirtualHousehold {
         }
     }
     
+    async sendStopSignalToDistributedServer() {
+        /**
+         * REMOVED: Direct stop signals to ISP servers
+         * All stop signals now go through the central server which relays to ISP servers
+         * This ensures proper multi-user safety and session management
+         */
+        console.log(`🔍 DISTRIBUTED MODE: Stop signals handled by central server relay`);
+        if (this.logger && this.logger.log) this.logger.log(`🔍 DISTRIBUTED MODE: Stop signals handled by central server relay`);
+        
+        // Return success since the main stop signal to central server handles everything
+        return { success: true, result: "Central server handles stop signal relay" };
+        
+        // REMOVED: The following code was sending stop signals directly to ISP servers
+        // which violates the distributed architecture and can affect other users' tests
+        /*
+        try {
+            console.log(`🛑 Sending stop signal to distributed server for all sessions`);
+            if (this.logger && this.logger.log) this.logger.log(`🛑 Sending stop signal to distributed server for all sessions`);
+            
+            // Import server discovery to get the correct server URL
+            const { serverDiscovery } = await import('../discovery.js');
+            
+            // Use the main server endpoint for stopping all sessions
+            let stopUrl;
+            if (serverDiscovery.currentServer) {
+                stopUrl = `${serverDiscovery.currentServer.url}/virtual-household/stop-user-sessions/${this.testStartTime}`;
+            } else {
+                stopUrl = `${window.location.protocol}//${window.location.host}/virtual-household/stop-user-sessions/all`;
+            }
+            
+            console.log(`🔍 Distributed stop URL: ${stopUrl}`);
+            if (this.logger && this.logger.log) this.logger.log(`🔍 Distributed stop URL: ${stopUrl}`);
+            
+            // Send stop request for all sessions
+            const response = await fetch(stopUrl, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    action: 'stop_all_sessions',
+                    reason: 'test_completed',
+                    test_id: this.testStartTime ? Math.floor(this.testStartTime / 1000).toString() : 'all'
+                })
+            });
+            
+            if (response.ok) {
+                const result = await response.json();
+                console.log(`✅ Successfully sent stop signal to distributed server:`, result);
+                if (this.logger && this.logger.log) this.logger.log(`✅ Successfully sent stop signal to distributed server:`, result);
+                return { success: true, result };
+            } else {
+                const errorText = await response.text();
+                console.warn(`⚠️ Stop signal to distributed server failed: ${response.status} ${response.statusText} - ${errorText}`);
+                if (this.logger && this.logger.warn) this.logger.warn(`⚠️ Stop signal to distributed server failed: ${response.status} ${response.statusText} - ${errorText}`);
+                return { success: false, error: `${response.status} ${response.statusText}` };
+            }
+            
+        } catch (error) {
+            console.error(`❌ Error sending stop signal to distributed server:`, error);
+            if (this.logger && this.logger.error) this.logger.error(`❌ Error sending stop signal to distributed server:`, error);
+            return { success: false, error: error.message };
+        }
+    }
+
     async sendStopSignalToProcess(userType, port, sessionId) {
         /**
          * Send stop signal directly to the dedicated process for this user type
@@ -1668,10 +1815,31 @@ class VirtualHousehold {
             console.log(`🛑 Sending stop signal to ${userType} process on port ${port} for session ${sessionId}`);
             if (this.logger && this.logger.log) this.logger.log(`🛑 Sending stop signal to ${userType} process on port ${port} for session ${sessionId}`);
             
-            // Construct URL for the dedicated process
-            const protocol = window.location.protocol.replace(':', '');
-            const hostname = window.location.hostname;
-            const processUrl = `${protocol}://${hostname}:${port}/stop-session`;
+            // Import server discovery to get the correct server URL
+            const { serverDiscovery } = await import('../discovery.js');
+            
+            // Construct URL for the dedicated process using discovered server
+            let protocol, hostname;
+            if (serverDiscovery.currentServer) {
+                const serverUrl = new URL(serverDiscovery.currentServer.url);
+                protocol = serverUrl.protocol.replace(':', '');
+                hostname = serverUrl.hostname;
+            } else {
+                protocol = window.location.protocol.replace(':', '');
+                hostname = window.location.hostname;
+            }
+            // DISTRIBUTED ARCHITECTURE FIX: In distributed mode, send stop signals to main server
+            // instead of trying to reach dedicated processes on specific ports
+            let processUrl;
+            if (serverDiscovery.currentServer && hostname !== 'localhost' && hostname !== '127.0.0.1') {
+                // Distributed architecture: use main server endpoint
+                processUrl = `${protocol}://${hostname}/virtual-household/stop-user-sessions/all`;
+                console.log(`🔍 DISTRIBUTED MODE: Using main server stop endpoint instead of port ${port}`);
+                if (this.logger && this.logger.log) this.logger.log(`🔍 DISTRIBUTED MODE: Using main server stop endpoint instead of port ${port}`);
+            } else {
+                // Local multiprocess architecture: use dedicated process ports
+                processUrl = `${protocol}://${hostname}:${port}/stop-session`;
+            }
             
             console.log(`🔍 Process stop URL: ${processUrl}`);
             if (this.logger && this.logger.log) this.logger.log(`🔍 Process stop URL: ${processUrl}`);
@@ -1718,13 +1886,10 @@ class VirtualHousehold {
             userData.description = this.generateUserDescription(userId, userData.metrics, grade);
         }
         
-        // Calculate overall performance metrics
-        this.testResults.overall = {
-            fairness: this.calculateNetworkFairness(),
-            stability: this.calculateLatencyStability()
-        };
+        // SIMPLIFIED: Only calculate overall grade based on Alex and Sarah
+        this.testResults.overall = {};
         
-        // Calculate overall grade based on individual user grades
+        // Calculate overall grade based on Alex and Sarah individual grades
         this.testResults.overall.overallGrade = this.calculateOverallGrade();
         
         // Generate recommendations
@@ -1899,9 +2064,9 @@ class VirtualHousehold {
         // and monitors Computer's safety threshold
         
         const userWeights = {
-            alex: 0.48,    // 48% - Primary latency-sensitive (gaming)
-            sarah: 0.48,   // 48% - Primary latency-sensitive (video calls)
-            jake: 0.04,    // 4% - Secondary consideration (streaming)
+            alex: 0.45,    // 45% - Primary latency-sensitive (gaming)
+            sarah: 0.45,   // 45% - Primary latency-sensitive (video calls)
+            jake: 0.10,    // 10% - Secondary consideration (streaming)
             computer: 0.0  // 0% - Not included in stability scoring
         };
         
@@ -2246,9 +2411,11 @@ class VirtualHousehold {
     }
     
     analyzeNetworkFairnessRecommendations(recommendations) {
-        const fairnessGrade = this.testResults.overall.fairness;
+        // SIMPLIFIED: Check individual Alex and Sarah grades for throughput issues
+        const alexGrade = this.testResults.users.alex?.grade || 'F';
+        const sarahGrade = this.testResults.users.sarah?.grade || 'F';
         
-        if (fairnessGrade === 'F' || fairnessGrade === 'D') {
+        if (alexGrade === 'F' || alexGrade === 'D' || sarahGrade === 'F' || sarahGrade === 'D') {
             // Critical throughput issues
             const alexData = this.testResults.users.alex;
             const sarahData = this.testResults.users.sarah;
@@ -2285,7 +2452,7 @@ class VirtualHousehold {
                 description: `Primary users cannot reach their throughput targets: ${specificIssues.join('; ')}. Consider implementing Smart Queue Management (SQM) or upgrading your internet plan.`
             });
             
-        } else if (fairnessGrade === 'C') {
+        } else if (alexGrade === 'C' || sarahGrade === 'C') {
             recommendations.push({
                 type: 'warning',
                 title: 'Inconsistent Throughput Performance',
@@ -2295,9 +2462,11 @@ class VirtualHousehold {
     }
     
     analyzeLatencyStabilityRecommendations(recommendations) {
-        const stabilityGrade = this.testResults.overall.stability;
+        // SIMPLIFIED: Check individual Alex and Sarah grades for latency issues
+        const alexGrade = this.testResults.users.alex?.grade || 'F';
+        const sarahGrade = this.testResults.users.sarah?.grade || 'F';
         
-        if (stabilityGrade === 'F' || stabilityGrade === 'D') {
+        if (alexGrade === 'F' || alexGrade === 'D' || sarahGrade === 'F' || sarahGrade === 'D') {
             // Critical latency issues
             const alexData = this.testResults.users.alex;
             const sarahData = this.testResults.users.sarah;
@@ -2336,7 +2505,7 @@ class VirtualHousehold {
                 description: `Real-time applications are severely impacted: ${latencyIssues.join('; ')}. Implement bufferbloat mitigation (SQM/fq_codel) immediately.`
             });
             
-        } else if (stabilityGrade === 'C') {
+        } else if (alexGrade === 'C' || sarahGrade === 'C') {
             recommendations.push({
                 type: 'warning',
                 title: 'Latency Consistency Issues',
@@ -2417,8 +2586,8 @@ class VirtualHousehold {
     }
     
     calculateOverallGrade() {
-        // Calculate overall grade with 90% Latency Stability, 10% Network Fairness weighting
-        // Individual user grades are not considered as they may be affected by measurement artifacts
+        // SIMPLIFIED: Base overall grade on average of Alex and Sarah individual grades
+        // They are the priority users most sensitive to bufferbloat
         
         // Convert letter grades to numeric scores
         const gradeToScore = {
@@ -2439,19 +2608,15 @@ class VirtualHousehold {
             return 'F';
         };
         
-        // Get overall metrics (fairness, stability)
-        const overallMetrics = this.testResults.overall;
+        // Get Alex and Sarah individual grades
+        const alexGrade = this.testResults.users.alex?.grade || 'F';
+        const sarahGrade = this.testResults.users.sarah?.grade || 'F';
         
-        if (!overallMetrics.fairness || !overallMetrics.stability) {
-            return 'F'; // No data
-        }
+        const alexScore = gradeToScore[alexGrade] || 50;
+        const sarahScore = gradeToScore[sarahGrade] || 50;
         
-        const fairnessScore = gradeToScore[overallMetrics.fairness] || 75;
-        const stabilityScore = gradeToScore[overallMetrics.stability] || 75;
-        
-        // Calculate final score with 90% Latency Stability, 10% Network Fairness weighting
-        const finalScore = (stabilityScore * 0.9) + (fairnessScore * 0.1);
-        
+        // Simple average of Alex and Sarah scores
+        const finalScore = (alexScore + sarahScore) / 2;
         
         return scoreToGrade(finalScore);
     }

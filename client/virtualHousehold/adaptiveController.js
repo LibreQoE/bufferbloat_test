@@ -84,23 +84,17 @@ class AdaptiveController {
         }, 500); // Reduced frequency to prevent flashing
         
         try {
-            // Phase 1: Warmup (10 seconds) - MUST complete before Phase 2
-            console.log('📡 Phase 1: Starting connection speed detection...');
-            console.log('🔍 DEBUG: About to call runWarmupPhase()');
+            // Phase 1: Speed Detection (10 seconds)
+            console.log('📡 Phase 1: Speed Detection (10 seconds)');
+            this.state = 'warmup';
             await this.runWarmupPhase();
-            console.log('✅ Phase 1: Connection speed detection complete');
-            console.log('🔍 DEBUG: Warmup results after Phase 1:', this.warmupResults);
+            console.log('✅ Speed detection complete');
             
-            // Brief pause between phases (removed progress bar reset to prevent blinking)
-            console.log('🔍 DEBUG: Pausing 1 second between phases');
-            await new Promise(resolve => setTimeout(resolve, 1000));
-            
-            // Phase 2: Household simulation (30 seconds) - start only after Phase 1 completes
-            console.log('🏠 Phase 2: Starting household simulation...');
-            this.state = 'household'; // Ensure state is set for Phase 2
-            console.log('🔍 DEBUG: About to call startHouseholdPhase()');
+            // Phase 2: Household simulation (30 seconds)
+            console.log('🏠 Phase 2: Household simulation (30 seconds)');
+            this.state = 'household';
             await this.startHouseholdPhase();
-            console.log('✅ Phase 2: Household simulation complete');
+            console.log('✅ Household simulation complete');
             
             console.log('✅ Integrated Adaptive Virtual Household Test Complete');
             

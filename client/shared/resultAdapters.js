@@ -312,30 +312,7 @@ class VirtualHouseholdAdapter {
                 showApproved: ['A+', 'A'].includes(overall.overallGrade || 'F')
             },
             phases: [
-                {
-                    id: 'fairness',
-                    name: 'Network Fairness',
-                    grade: overall.fairness || 'F',
-                    cssClass: gradeToClass(overall.fairness || 'F'),
-                    metric: convertGradeToPercent(overall.fairness || 'F') + '%',
-                    tooltip: {
-                        header: `Network Fairness: ${overall.fairness || 'F'}`,
-                        content: `How fairly bandwidth is distributed among household users — ${this.getFairnessDescription(overall.fairness || 'F')}`
-                    },
-                    showInShareImage: true
-                },
-                {
-                    id: 'stability',
-                    name: 'Latency Stability',
-                    grade: overall.stability || 'F',
-                    cssClass: gradeToClass(overall.stability || 'F'),
-                    metric: convertGradeToPercent(overall.stability || 'F') + '%',
-                    tooltip: {
-                        header: `Latency Stability: ${overall.stability || 'F'}`,
-                        content: `How consistent latency remains under household load — ${this.getStabilityDescription(overall.stability || 'F')}`
-                    },
-                    showInShareImage: true
-                }
+                // SIMPLIFIED: No fairness/stability phases - overall grade is based on Alex & Sarah
             ],
             statistics: {
                 custom: this.transformHouseholdStats(householdData),
@@ -358,19 +335,19 @@ class VirtualHouseholdAdapter {
     generateHouseholdGradeDescription(grade) {
         switch (grade) {
             case 'A+':
-                return 'exceptional network performance for your virtual household!';
+                return 'exceptional bufferbloat performance - Alex (Gaming) and Sarah (Video Calls) both performed excellently!';
             case 'A':
-                return 'excellent network performance for your virtual household!';
+                return 'excellent bufferbloat performance - Alex (Gaming) and Sarah (Video Calls) both performed very well!';
             case 'B':
-                return 'good network performance for your virtual household.';
+                return 'good bufferbloat performance - Alex (Gaming) and Sarah (Video Calls) performed adequately.';
             case 'C':
-                return 'fair network performance for your virtual household.';
+                return 'fair bufferbloat performance - Alex (Gaming) and Sarah (Video Calls) experienced some issues.';
             case 'D':
-                return 'poor network performance for your virtual household.';
+                return 'poor bufferbloat performance - Alex (Gaming) and Sarah (Video Calls) experienced significant issues.';
             case 'F':
-                return 'very poor network performance for your virtual household.';
+                return 'very poor bufferbloat performance - Alex (Gaming) and Sarah (Video Calls) experienced severe issues.';
             default:
-                return 'network performance measured for your virtual household.';
+                return 'bufferbloat performance measured for Alex (Gaming) and Sarah (Video Calls).';
         }
     }
 
@@ -420,26 +397,8 @@ class VirtualHouseholdAdapter {
      * Transform household statistics
      */
     transformHouseholdStats(householdData) {
-        const stats = [];
-        const overall = householdData.overall || {};
-
-        if (overall.fairness) {
-            stats.push({
-                label: 'Network Fairness',
-                value: `${convertGradeToPercent(overall.fairness)}%`,
-                description: 'How evenly bandwidth is shared'
-            });
-        }
-
-        if (overall.stability) {
-            stats.push({
-                label: 'Latency Stability',
-                value: `${convertGradeToPercent(overall.stability)}%`,
-                description: 'How consistent latency remains'
-            });
-        }
-
-        return stats;
+        // SIMPLIFIED: No custom stats - overall grade is based purely on Alex & Sarah
+        return [];
     }
 
     /**
@@ -460,61 +419,30 @@ class VirtualHouseholdAdapter {
     getHouseholdExplanation() {
         return `
             <div class="explanation-intro">
-                <p>Your Virtual Household test simulates multiple users with different internet usage patterns to evaluate your network's performance under realistic load.</p>
+                <p>Your Virtual Household test simulates multiple users with different internet usage patterns to evaluate your network's bufferbloat performance under realistic load.</p>
             </div>
             
-            <!-- Network Fairness Explanation -->
+            <!-- Simplified Scoring Explanation -->
             <div class="metric-explanation-section">
-                <h4>Network Fairness</h4>
-                <p><strong>What it measures:</strong> How evenly bandwidth is distributed among different users and applications in your household.</p>
-                <p><strong>How it's calculated:</strong> We measure the actual throughput each virtual user receives compared to their target bandwidth needs, then calculate how fairly the available bandwidth is shared using the Jain's Fairness Index formula.</p>
+                <h4>Overall Bufferbloat Score</h4>
+                <p><strong>What it measures:</strong> How well your network handles bufferbloat when multiple latency-sensitive applications are running simultaneously.</p>
+                <p><strong>How it's calculated:</strong> Your overall grade is the simple average of Alex (Gaming) and Sarah (Video Calls) individual performance grades. These are the two users most sensitive to bufferbloat and latency issues.</p>
                 <div class="calculation-details">
-                    <p><strong>Calculation method:</strong></p>
+                    <p><strong>Simplified Formula:</strong></p>
                     <ul>
-                        <li>Each user has target bandwidth requirements (Gaming: 1.5 Mbps, Video calls: 2.5 Mbps, Streaming: 25 Mbps, Downloads: varies)</li>
-                        <li>We measure actual throughput achieved by each user during the test</li>
-                        <li>Fairness score = (sum of throughputs)² / (n × sum of throughputs²) where n = number of users</li>
-                        <li>Score ranges from 0% (completely unfair) to 100% (perfectly fair)</li>
+                        <li><strong>Overall Grade = (Alex Grade + Sarah Grade) ÷ 2</strong></li>
+                        <li><strong>Alex (Gaming):</strong> Tests low-latency gaming performance with 1.5 Mbps requirements</li>
+                        <li><strong>Sarah (Video Calls):</strong> Tests video conferencing performance with 2.5 Mbps bidirectional requirements</li>
+                        <li><strong>Rationale:</strong> Gaming and video calls are the most affected by bufferbloat and require consistent low latency</li>
                     </ul>
                 </div>
-            </div>
-            
-            <!-- Latency Stability Explanation -->
-            <div class="metric-explanation-section">
-                <h4>Latency Stability</h4>
-                <p><strong>What it measures:</strong> How consistent response times remain when multiple users are active simultaneously.</p>
-                <p><strong>How it's calculated:</strong> We continuously measure latency for each user throughout the test and calculate the coefficient of variation (standard deviation / mean) to determine stability. <strong>This metric is primarily weighted based on Alex (Gaming) and Sarah (Video Calls) performance</strong>, as these users are most sensitive to latency variations.</p>
                 <div class="calculation-details">
-                    <p><strong>Calculation method:</strong></p>
+                    <p><strong>Why Focus on Alex and Sarah?</strong></p>
                     <ul>
-                        <li>Latency is measured every 100ms for each virtual user during the 30-second household simulation</li>
-                        <li><strong>Weighting Formula:</strong> Alex (Gaming) = 40%, Sarah (Video Calls) = 40%, Jake (Streaming) = 15%, Computer (Downloads) = 5%</li>
-                        <li>We calculate the coefficient of variation for each user: CV = (standard deviation / mean latency) × 100</li>
-                        <li>Overall stability CV = (Alex_CV × 0.4) + (Sarah_CV × 0.4) + (Jake_CV × 0.15) + (Computer_CV × 0.05)</li>
-                        <li>Lower CV values indicate more stable latency</li>
-                        <li>Stability percentage = max(0, 100 - Overall_CV) where CV < 10% = excellent stability</li>
-                        <li><strong>Rationale:</strong> Gaming and video calls require the most consistent latency for optimal user experience</li>
-                    </ul>
-                </div>
-            </div>
-            
-            <!-- Overall Grade Calculation -->
-            <div class="metric-explanation-section">
-                <h4>Overall Grade Calculation</h4>
-                <p><strong>What it measures:</strong> Your overall network performance combining fairness, stability, and individual user experiences.</p>
-                <p><strong>How it's calculated:</strong> The overall grade is a weighted average of multiple performance metrics, designed to reflect real-world user satisfaction.</p>
-                <div class="calculation-details">
-                    <p><strong>Weighting Formula:</strong></p>
-                    <ul>
-                        <li><strong>Latency Stability (90%):</strong> How consistent response times remain under load</li>
-                        <li><strong>Network Fairness (10%):</strong> How evenly bandwidth is distributed among users</li>
-                    </ul>
-                    <p><strong>Calculation Steps:</strong></p>
-                    <ul>
-                        <li>1. Calculate Network Fairness percentage using Jain's Fairness Index</li>
-                        <li>2. Calculate Latency Stability percentage using coefficient of variation</li>
-                        <li>3. Combine using weighted formula: Overall = (Stability × 0.9) + (Fairness × 0.1)</li>
-                        <li>4. Convert final percentage to letter grade using standard scale</li>
+                        <li>Gaming requires ultra-low latency (≤75ms) to avoid lag and stuttering</li>
+                        <li>Video calls need consistent latency (≤150ms) for smooth conversation</li>
+                        <li>These applications are most negatively impacted by bufferbloat</li>
+                        <li>Jake (Streaming) and Computer (Downloads) are more tolerant of latency variations</li>
                     </ul>
                 </div>
             </div>
@@ -525,49 +453,49 @@ class VirtualHouseholdAdapter {
                 <div class="grade-explanation a-plus">
                     <div class="grade-badge a-plus">A+</div>
                     <div class="grade-description">
-                        <h4>Excellent (95-100%)</h4>
-                        <p>Outstanding network performance. All users get fair bandwidth allocation and latency remains very stable under load.</p>
+                        <h4>Excellent</h4>
+                        <p>Outstanding bufferbloat performance. Both Alex (Gaming) and Sarah (Video Calls) performed excellently with minimal latency increases under household load.</p>
                     </div>
                 </div>
                 <div class="grade-explanation a">
                     <div class="grade-badge a">A</div>
                     <div class="grade-description">
-                        <h4>Very Good (90-94%)</h4>
-                        <p>Great network performance with minor variations. Most users get adequate bandwidth with stable latency.</p>
+                        <h4>Very Good</h4>
+                        <p>Great bufferbloat performance. Alex (Gaming) and Sarah (Video Calls) both performed very well with only minor latency increases.</p>
                     </div>
                 </div>
                 <div class="grade-explanation b">
                     <div class="grade-badge b">B</div>
                     <div class="grade-description">
-                        <h4>Good (80-89%)</h4>
-                        <p>Good network performance with some inequality in bandwidth distribution or latency variations under load.</p>
+                        <h4>Good</h4>
+                        <p>Good bufferbloat performance. Alex (Gaming) and Sarah (Video Calls) experienced some latency increases but remained usable.</p>
                     </div>
                 </div>
                 <div class="grade-explanation c">
                     <div class="grade-badge c">C</div>
                     <div class="grade-description">
-                        <h4>Fair (70-79%)</h4>
-                        <p>Acceptable performance but some users may experience reduced bandwidth or inconsistent latency during peak usage.</p>
+                        <h4>Fair</h4>
+                        <p>Acceptable performance with moderate bufferbloat. Alex (Gaming) or Sarah (Video Calls) experienced noticeable latency issues during household usage.</p>
                     </div>
                 </div>
                 <div class="grade-explanation d">
                     <div class="grade-badge d">D</div>
                     <div class="grade-description">
-                        <h4>Poor (60-69%)</h4>
-                        <p>Poor network performance with significant bandwidth inequality or latency instability affecting user experience.</p>
+                        <h4>Poor</h4>
+                        <p>Poor bufferbloat performance. Alex (Gaming) and Sarah (Video Calls) experienced significant latency problems affecting usability.</p>
                     </div>
                 </div>
                 <div class="grade-explanation f">
                     <div class="grade-badge f">F</div>
                     <div class="grade-description">
-                        <h4>Very Poor (Below 60%)</h4>
-                        <p>Very poor network performance. Major bandwidth inequality and latency instability make multi-user scenarios problematic.</p>
+                        <h4>Very Poor</h4>
+                        <p>Severe bufferbloat problems. Alex (Gaming) and Sarah (Video Calls) experienced major latency issues making real-time applications nearly unusable.</p>
                     </div>
                 </div>
             </div>
             
             <div class="explanation-footer">
-                <p><strong>What can I do to improve?</strong> Consider upgrading your router firmware to one with better Quality of Service (QoS) management, or contact your ISP about implementing Smart Queue Management (SQM).</p>
+                <p><strong>What can I do about bufferbloat?</strong> Consider upgrading your router firmware to one with Smart Queue Management (SQM) like OpenWrt, or contact your ISP about implementing bufferbloat controls. QoS settings alone are often insufficient - proper queue management is key.</p>
             </div>
         `;
     }

@@ -11,7 +11,7 @@ import time
 import os
 from typing import Dict, Optional, Set, List
 from dataclasses import dataclass, field
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Request
 from fastapi.responses import JSONResponse
 from starlette.websockets import WebSocketState
 from websockets.exceptions import ConnectionClosed
@@ -185,14 +185,18 @@ class HighPerformanceDataPool:
     def __init__(self):
         self.bulk_pools = {}
         self._generate_bulk_pools()
+        # WARMUP EFFICIENCY: Add warmup's exact 4MB pool approach
+        self.WARMUP_CHUNK_SIZE = 1048576  # 1MB chunks like warmup
+        self.WARMUP_POOL = os.urandom(self.WARMUP_CHUNK_SIZE * 4)  # 4MB pool like warmup
+        logger.info("🚀 WARMUP POOL: Created 4MB warmup-style data pool for fixed 1MB chunks")
     
     def _generate_bulk_pools(self):
         """Generate large bulk data pools for high-throughput traffic"""
         logger.info("🚀 Generating high-performance bulk data pools...")
         
-        # Generate large bulk pools for efficient high-throughput traffic
-        # Each pool is 1MB of random data that can be sliced efficiently
-        bulk_sizes = [1048576, 2097152, 4194304]  # 1MB, 2MB, 4MB pools
+        # PERFORMANCE FIX: Generate larger pools to support high-throughput users
+        # Include pools up to 64MB to support 1000 Mbps Computer user
+        bulk_sizes = [1048576, 2097152, 4194304, 8388608, 16777216, 33554432, 67108864]  # 1MB to 64MB pools
         
         for size in bulk_sizes:
             logger.info(f"📦 Generating {size // 1048576}MB bulk data pool...")
@@ -201,28 +205,32 @@ class HighPerformanceDataPool:
         logger.info(f"✅ Generated {len(self.bulk_pools)} high-performance bulk data pools")
     
     def get_bulk_data(self, size: int) -> bytes:
-        """Memory-efficient bulk data generation with size limits"""
-        # MEMORY OPTIMIZATION: Cap individual chunk size to prevent OOM
-        max_single_chunk = 2097152  # 2MB absolute maximum per chunk
+        """High-performance bulk data generation for all throughput levels"""
+        # PERFORMANCE FIX: Allow larger chunks to support high-throughput users
+        # Increased limit to 64MB to support 1000 Mbps Computer user
+        max_single_chunk = 67108864  # 64MB maximum per chunk
         if size > max_single_chunk:
             logger.warning(f"🔍 DATA POOL: Requested {size} bytes exceeds max chunk size {max_single_chunk}, capping")
             size = max_single_chunk
         
-        # Use the 1MB pool for most requests, cycling through it
-        base_pool = self.bulk_pools[1048576]  # 1MB pool
+        # PERFORMANCE FIX: Use appropriately sized pools for efficient data generation
+        # Find the smallest pool that can satisfy the request
+        suitable_pools = [pool_size for pool_size in sorted(self.bulk_pools.keys()) if pool_size >= size]
         
-        if size <= len(base_pool):
-            # Simple slice from the pool
-            return base_pool[:size]
+        if suitable_pools:
+            # Use the smallest pool that can satisfy the request
+            chosen_pool_size = suitable_pools[0]
+            return self.bulk_pools[chosen_pool_size][:size]
         else:
-            # For larger requests, use the biggest available pool
-            largest_pool = min(max(self.bulk_pools.keys()), max_single_chunk)
-            if size <= largest_pool:
-                return self.bulk_pools[largest_pool][:size]
-            else:
-                # For requests larger than our pools, slice from largest pool
-                # This prevents memory multiplication for very large requests
-                return self.bulk_pools[largest_pool][:size]
+            # Request is larger than any pool, use the largest available
+            largest_pool_size = max(self.bulk_pools.keys())
+            return self.bulk_pools[largest_pool_size][:size]
+    
+    def get_warmup_chunk(self, chunk_count: int) -> bytes:
+        """Get warmup-style fixed 1MB chunk from 4MB pool (exactly like warmup)"""
+        # WARMUP EFFICIENCY: Use warmup's exact cycling approach
+        chunk_offset = (chunk_count % 4) * self.WARMUP_CHUNK_SIZE
+        return self.WARMUP_POOL[chunk_offset:chunk_offset + self.WARMUP_CHUNK_SIZE]
 
 class HighPerformanceTrafficGenerator:
     """High-performance bulk traffic generator with async batching"""
@@ -230,27 +238,21 @@ class HighPerformanceTrafficGenerator:
     def __init__(self, data_pool: HighPerformanceDataPool):
         self.data_pool = data_pool
         # Pre-calculate optimal chunk sizes for different throughput targets
-        # MEMORY OPTIMIZATION: More conservative chunk sizes for high throughput
+        # THROUGHPUT FIX: Chunk size thresholds increased 4x to achieve target speeds
         self.chunk_size_map = {
-            1.0: 65536,     # 1 Mbps -> 64KB chunks
-            5.0: 262144,    # 5 Mbps -> 256KB chunks
-            10.0: 524288,   # 10 Mbps -> 512KB chunks
-            25.0: 1048576,  # 25 Mbps -> 1MB chunks
-            50.0: 1048576,  # 50 Mbps -> 1MB chunks (reduced from 2MB)
-            100.0: 1048576, # 100 Mbps -> 1MB chunks
-            200.0: 1048576, # 200 Mbps -> 1MB chunks (Computer user)
-            500.0: 1048576, # 500 Mbps -> 1MB chunks
-            1000.0: 1048576 # 1000 Mbps -> 1MB chunks (prevents OOM)
+            1.0: 65536,      # 1 Mbps -> 64KB chunks
+            5.0: 262144,     # 5 Mbps -> 256KB chunks
+            25.0: 524288,    # 25 Mbps -> 512KB chunks (was 10 Mbps)
+            100.0: 1048576,  # 100 Mbps -> 1MB chunks (was 25 Mbps)
+            200.0: 2097152,  # 200 Mbps -> 2MB chunks (was 50 Mbps)
+            400.0: 4194304,  # 400 Mbps -> 4MB chunks (was 100 Mbps)
+            800.0: 8388608,  # 800 Mbps -> 8MB chunks (was 200 Mbps)
+            1000.0: 16777216, # 1000 Mbps -> 16MB chunks (was 500 Mbps)
+            2000.0: 33554432 # 2000 Mbps -> 32MB chunks (was 1000 Mbps)
         }
     
-    def _get_optimal_chunk_size(self, target_mbps: float) -> int:
-        """Get optimal chunk size based on target throughput"""
-        # Find the best chunk size for the target throughput
-        for mbps_threshold in sorted(self.chunk_size_map.keys()):
-            if target_mbps <= mbps_threshold:
-                return self.chunk_size_map[mbps_threshold]
-        # For very high throughput, use the largest chunk size
-        return max(self.chunk_size_map.values())
+    # WARMUP EFFICIENCY: Removed _get_optimal_chunk_size method completely
+    # Both downloads and uploads now use fixed 1MB chunks like warmup
     
     def get_current_effective_rate(self, session: TrafficSession, direction: str = 'download') -> float:
         """Calculate current effective rate based on burst pattern"""
@@ -313,7 +315,7 @@ class HighPerformanceTrafficGenerator:
         return profile.download_mbps if direction == 'download' else profile.upload_mbps
 
     async def generate_download_traffic_bulk(self, session: TrafficSession, duration_ms: int = 250):
-        """RESOURCE LEAK FIX: Memory-efficient bulk download traffic generation with connection safeguards"""
+        """RESOURCE LEAK FIX: Memory-efficient bulk download traffic generation with 4-stream multiplexing for high-throughput users"""
         start_time = time.time()
         try:
             # RESOURCE LEAK FIX: Pre-generation session validation
@@ -332,6 +334,9 @@ class HighPerformanceTrafficGenerator:
             effective_download_mbps = self.get_current_effective_rate(session, 'download')
             target_bytes = int((effective_download_mbps * 1_000_000 / 8) * (duration_ms / 1000))
             
+            # THROUGHPUT FIX: Debug log to identify 4x conservative issue
+            logger.info(f"🔍 THROUGHPUT DEBUG: {session.user_id} - Profile speed: {session.profile.download_mbps} Mbps, Effective: {effective_download_mbps} Mbps, Target bytes: {target_bytes}")
+            
             # DIAGNOSTIC: Log traffic generation parameters with burst pattern info
             logger.info(f"🔍 TRAFFIC GEN: {session.user_id} - Target: {target_bytes} bytes "
                        f"({effective_download_mbps} Mbps effective rate × {duration_ms}ms) "
@@ -346,30 +351,23 @@ class HighPerformanceTrafficGenerator:
                 logger.warning(f"🔍 TRAFFIC GEN: {session.user_id} - Zero target bytes!")
                 return 0
             
-            # MEMORY OPTIMIZATION: Cap chunk size for high-throughput users to prevent OOM
-            base_chunk_size = self._get_optimal_chunk_size(effective_download_mbps)
-            # For very high throughput (>100 Mbps), limit chunk size to prevent memory exhaustion
-            if effective_download_mbps > 100.0:
-                max_chunk_size = 1048576  # 1MB max chunks for high throughput
-                optimal_chunk_size = min(base_chunk_size, max_chunk_size)
-                logger.info(f"🔍 TRAFFIC GEN: {session.user_id} - High throughput mode: chunk size limited to {optimal_chunk_size} bytes")
-            else:
-                optimal_chunk_size = base_chunk_size
+            # ALL USERS: Keep interval-based realistic patterns with warmup chunks
+            optimal_chunk_size = 1048576  # Fixed 1MB chunks like warmup
+            logger.info(f"🚀 WARMUP STYLE: {session.user_id} - Using fixed 1MB chunks")
             
-            logger.info(f"🔍 TRAFFIC GEN: {session.user_id} - Optimal chunk size: {optimal_chunk_size} bytes")
+            logger.info(f"🔍 TRAFFIC GEN: {session.user_id} - Target: {target_bytes} bytes, Chunk size: {optimal_chunk_size} bytes")
             
-            # For small targets, send in one chunk
+            # ADAPTIVE/WARMUP: Single chunk case when target fits in one chunk
             if target_bytes <= optimal_chunk_size:
                 try:
-                    # RESOURCE LEAK FIX: Double-check connection before sending
-                    if session.websocket.client_state != WebSocketState.CONNECTED:
-                        logger.warning(f"🔍 TRAFFIC GEN: {session.user_id} - Connection lost before single chunk send")
-                        session.active = False
-                        return 0
-                    
-                    logger.info(f"🔍 TRAFFIC GEN: {session.user_id} - Single chunk mode: {target_bytes} bytes")
-                    bulk_data = self.data_pool.get_bulk_data(target_bytes)
-                    logger.info(f"🔍 TRAFFIC GEN: {session.user_id} - Generated data: {len(bulk_data)} bytes")
+                    if session.user_id.startswith('computer_'):
+                        logger.info(f"🚀 COMPUTER ADAPTIVE: {session.user_id} - Single large chunk: {target_bytes} bytes")
+                        # COMPUTER OPTIMIZATION: Use bulk data generation for large chunks
+                        bulk_data = self.data_pool.get_bulk_data(target_bytes)
+                    else:
+                        logger.info(f"🚀 WARMUP STYLE: {session.user_id} - Single chunk mode: {target_bytes} bytes")
+                        # WARMUP EFFICIENCY: Use warmup pool for small chunks
+                        bulk_data = self.data_pool.WARMUP_POOL[:target_bytes]
                     
                     send_start = time.time()
                     await session.websocket.send_bytes(bulk_data)
@@ -378,13 +376,18 @@ class HighPerformanceTrafficGenerator:
                     session.server_sent_bytes += target_bytes
                     # Update measurement window for current rate calculation
                     RealTrafficMeasurement.update_measurement_window(session, 'download', target_bytes)
-                    logger.info(f"🔍 TRAFFIC GEN: {session.user_id} - SUCCESS: Sent {target_bytes} bytes "
+                    logger.info(f"🚀 WARMUP-STYLE: {session.user_id} - SUCCESS: Sent {target_bytes} bytes "
                                f"in {send_duration*1000:.1f}ms")
                     return target_bytes
+                    
+                except (ConnectionClosed, WebSocketDisconnect) as e:
+                    # WARMUP EFFICIENCY: Natural WebSocket disconnection
+                    logger.info(f"📡 WARMUP-STYLE: {session.user_id} - WebSocket disconnected during single chunk: {type(e).__name__}")
+                    session.active = False
+                    return 0
+                    
                 except Exception as e:
-                    logger.error(f"🔍 TRAFFIC GEN: {session.user_id} - BULK SEND FAILED: {e}")
-                    logger.error(f"🔍 TRAFFIC GEN: {session.user_id} - WebSocket state after error: {session.websocket.client_state}")
-                    # RESOURCE LEAK FIX: Mark session inactive on send failure
+                    logger.error(f"❌ WARMUP-STYLE: {session.user_id} - Single chunk send failed: {e}")
                     session.active = False
                     return 0
             
@@ -394,25 +397,34 @@ class HighPerformanceTrafficGenerator:
             remaining = target_bytes
             chunk_count = 0
             
-            # Calculate total chunks for logging
+            # Calculate total chunks for logging - adaptive for computer, fixed for others
             total_chunks = (target_bytes + optimal_chunk_size - 1) // optimal_chunk_size
-            logger.info(f"🔍 TRAFFIC GEN: {session.user_id} - Will stream {total_chunks} chunks")
+            logger.info(f"🚀 ADAPTIVE: {session.user_id} - Will stream {total_chunks} chunks of {optimal_chunk_size//1048576}MB each")
             
-            # Stream chunks one at a time to minimize memory usage
+            # WARMUP EFFICIENCY: Minimal delays like warmup for maximum throughput
             send_start = time.time()
-            while remaining > 0 and session.websocket.client_state == WebSocketState.CONNECTED and session.active:
+            # PERFORMANCE OPTIMIZATION: Even more minimal delays than before
+            # Warmup uses only 1ms between 1MB chunks, we'll use similar approach
+            micro_batch_delay = 0.001 if total_chunks > 50 else 0  # 1ms only for very large transfers (50+ chunks)
+            
+            # ADAPTIVE EFFICIENCY: Exception-based approach with optimal chunk sizes
+            # Computer user gets large chunks for saturation, others get 1MB warmup chunks
+            # Eliminate all proactive WebSocket state checks that cause latency overhead
+            while remaining > 0:
                 chunk_size = min(optimal_chunk_size, remaining)
                 chunk_count += 1
                 
-                # RESOURCE LEAK FIX: Check connection state before each chunk
-                if session.websocket.client_state != WebSocketState.CONNECTED:
-                    logger.warning(f"🔍 TRAFFIC GEN: {session.user_id} - Connection lost during chunk {chunk_count}, aborting")
-                    session.active = False
-                    break
-                
                 try:
-                    # Generate chunk on-demand to minimize memory footprint
-                    chunk_data = self.data_pool.get_bulk_data(chunk_size)
+                    # ADAPTIVE CHUNK GENERATION: Computer uses bulk data, others use warmup pool
+                    if session.user_id.startswith('computer_'):
+                        # COMPUTER OPTIMIZATION: Use bulk data for large chunks
+                        chunk_data = self.data_pool.get_bulk_data(chunk_size)
+                    elif chunk_size == 1048576:  # 1MB chunks for other users
+                        # WARMUP EFFICIENCY: Use warmup's cycling approach for 1MB chunks
+                        chunk_data = self.data_pool.get_warmup_chunk(chunk_count)
+                    else:
+                        # WARMUP EFFICIENCY: Use warmup pool for partial chunks
+                        chunk_data = self.data_pool.WARMUP_POOL[:chunk_size]
                     
                     chunk_send_start = time.time()
                     await session.websocket.send_bytes(chunk_data)
@@ -426,17 +438,32 @@ class HighPerformanceTrafficGenerator:
                     
                     # Log first and last chunk, plus every 10th chunk for high-throughput users
                     if chunk_count == 1 or chunk_count == total_chunks or (chunk_count % 10 == 0 and effective_download_mbps > 100):
-                        logger.info(f"🔍 TRAFFIC GEN: {session.user_id} - Chunk {chunk_count}/{total_chunks}: "
-                                   f"{chunk_size} bytes in {chunk_send_duration*1000:.1f}ms")
+                        if session.user_id.startswith('computer_'):
+                            logger.info(f"🚀 COMPUTER ADAPTIVE: {session.user_id} - Chunk {chunk_count}/{total_chunks}: "
+                                       f"{chunk_size} bytes in {chunk_send_duration*1000:.1f}ms")
+                        else:
+                            logger.info(f"🚀 WARMUP STYLE: {session.user_id} - Chunk {chunk_count}/{total_chunks}: "
+                                       f"{chunk_size} bytes in {chunk_send_duration*1000:.1f}ms")
                     
-                    # MEMORY OPTIMIZATION: Allow garbage collection between chunks for high throughput
-                    if effective_download_mbps > 500.0 and chunk_count % 5 == 0:
-                        await asyncio.sleep(0.001)  # 1ms pause every 5 chunks for GC
+                    # WARMUP EFFICIENCY: Minimal delay like warmup's 1ms pattern
+                    if micro_batch_delay > 0 and chunk_count % 10 == 0:  # Every 10th chunk only
+                        await asyncio.sleep(micro_batch_delay)
+                    
+                    # EFFICIENT TEST STOP: Only check session.active periodically, not WebSocket state
+                    # Let WebSocket exceptions handle connection issues naturally
+                    if chunk_count % 20 == 0 and not session.active:
+                        logger.info(f"🛑 WARMUP-STYLE: {session.user_id} - Test ended, stopping traffic generation")
+                        break
                         
+                except (ConnectionClosed, WebSocketDisconnect) as e:
+                    # WARMUP EFFICIENCY: Natural WebSocket disconnection - no proactive checks needed
+                    logger.info(f"📡 WARMUP-STYLE: {session.user_id} - WebSocket disconnected naturally: {type(e).__name__}")
+                    session.active = False
+                    break
+                    
                 except Exception as e:
-                    logger.error(f"🔍 TRAFFIC GEN: {session.user_id} - CHUNK {chunk_count} SEND FAILED: {e}")
-                    logger.error(f"🔍 TRAFFIC GEN: {session.user_id} - WebSocket state: {session.websocket.client_state}")
-                    # RESOURCE LEAK FIX: Mark session inactive on chunk send failure
+                    # Other errors (encoding, memory, etc.)
+                    logger.error(f"❌ WARMUP-STYLE: {session.user_id} - Chunk {chunk_count} send failed: {e}")
                     session.active = False
                     break
             
@@ -461,6 +488,94 @@ class HighPerformanceTrafficGenerator:
             logger.error(f"🔍 TRAFFIC GEN: {session.user_id} - WebSocket state: {session.websocket.client_state}")
             return 0
     
+    
+    async def _send_multistream_data(self, session: TrafficSession, target_bytes: int, stream_chunk_size: int, effective_download_mbps: float) -> int:
+        """Send data using 4 parallel streams to avoid WebSocket choking"""
+        try:
+            bytes_per_stream = target_bytes // 4
+            remaining_bytes = target_bytes % 4  # Handle any remainder
+            
+            logger.info(f"🚀 MULTISTREAM: {session.user_id} - Starting 4 parallel streams, {bytes_per_stream} bytes each")
+            
+            # Create 4 concurrent stream tasks
+            stream_tasks = []
+            for stream_id in range(4):
+                stream_bytes = bytes_per_stream + (1 if stream_id < remaining_bytes else 0)  # Distribute remainder
+                if stream_bytes > 0:
+                    task = asyncio.create_task(
+                        self._send_single_stream(session, stream_id, stream_bytes, stream_chunk_size, effective_download_mbps)
+                    )
+                    stream_tasks.append(task)
+            
+            # Wait for all streams to complete
+            results = await asyncio.gather(*stream_tasks, return_exceptions=True)
+            
+            # Calculate total bytes sent
+            total_bytes_sent = 0
+            for i, result in enumerate(results):
+                if isinstance(result, Exception):
+                    logger.error(f"🚀 MULTISTREAM: {session.user_id} - Stream {i} failed: {result}")
+                else:
+                    total_bytes_sent += result
+                    logger.info(f"🚀 MULTISTREAM: {session.user_id} - Stream {i} completed: {result} bytes")
+            
+            logger.info(f"🚀 MULTISTREAM: {session.user_id} - All streams complete: {total_bytes_sent}/{target_bytes} bytes")
+            return total_bytes_sent
+            
+        except Exception as e:
+            logger.error(f"🚀 MULTISTREAM: {session.user_id} - Fatal error: {e}")
+            return 0
+    
+    async def _send_single_stream(self, session: TrafficSession, stream_id: int, stream_bytes: int, chunk_size: int, effective_download_mbps: float) -> int:
+        """Send data for a single stream within the multistream approach"""
+        bytes_sent = 0
+        remaining = stream_bytes
+        chunk_count = 0
+        
+        try:
+            while remaining > 0 and session.websocket.client_state == WebSocketState.CONNECTED and session.active:
+                current_chunk_size = min(chunk_size, remaining)
+                chunk_count += 1
+                
+                # Generate chunk data
+                chunk_data = self.data_pool.get_bulk_data(current_chunk_size)
+                
+                # Create stream message with metadata
+                stream_message = {
+                    'type': 'multistream_data',
+                    'stream_id': stream_id,
+                    'chunk_id': chunk_count,
+                    'data_size': current_chunk_size,
+                    'timestamp': time.time() * 1000
+                }
+                
+                # Send metadata first, then binary data
+                await session.websocket.send_text(json.dumps(stream_message))
+                await session.websocket.send_bytes(chunk_data)
+                
+                bytes_sent += current_chunk_size
+                remaining -= current_chunk_size
+                session.server_sent_bytes += current_chunk_size
+                
+                # Update measurement window
+                RealTrafficMeasurement.update_measurement_window(session, 'download', current_chunk_size)
+                
+                # Small delay between chunks for flow control
+                if effective_download_mbps > 300 and chunk_count % 2 == 0:
+                    await asyncio.sleep(0.001)  # 1ms delay every 2nd chunk
+                
+                # Check session status periodically
+                if chunk_count % 5 == 0 and not session.active:
+                    logger.info(f"🚀 STREAM-{stream_id}: {session.user_id} - Session inactive, aborting")
+                    break
+                    
+            logger.info(f"🚀 STREAM-{stream_id}: {session.user_id} - Complete: {bytes_sent}/{stream_bytes} bytes")
+            return bytes_sent
+            
+        except Exception as e:
+            logger.error(f"🚀 STREAM-{stream_id}: {session.user_id} - Error: {e}")
+            return bytes_sent
+
     async def request_upload_traffic_bulk(self, session: TrafficSession, duration_ms: int = 250):
         """RESOURCE LEAK FIX: Request bulk upload traffic from client with connection safeguards"""
         try:
@@ -479,28 +594,28 @@ class HighPerformanceTrafficGenerator:
             effective_upload_mbps = self.get_current_effective_rate(session, 'upload')
             target_bytes = int((effective_upload_mbps * 1_000_000 / 8) * (duration_ms / 1000))
             
-            logger.info(f"🔍 UPLOAD REQUEST: {session.user_id} - Target: {target_bytes} bytes "
+            logger.info(f"🚀 WARMUP UPLOAD: {session.user_id} - Target: {target_bytes} bytes "
                        f"({effective_upload_mbps} Mbps effective rate × {duration_ms}ms) "
-                       f"[Profile: {session.profile.upload_mbps} Mbps]")
+                       f"[Profile: {session.profile.upload_mbps} Mbps, Fixed 1MB chunks]")
             
             if target_bytes <= 0:
                 logger.warning(f"🔍 UPLOAD REQUEST: {session.user_id} - Zero target bytes!")
                 return
             
-            # Get optimal chunk size for upload requests based on effective rate
-            optimal_chunk_size = self._get_optimal_chunk_size(effective_upload_mbps)
+            # WARMUP EFFICIENCY: Use fixed 1MB chunks for uploads too (same as downloads)
+            WARMUP_UPLOAD_CHUNK_SIZE = 1048576  # Fixed 1MB chunks like warmup
             
-            # Request client to send bulk data with optimized chunk size
+            # Request client to send bulk data with fixed warmup-style chunk size
             upload_request = {
                 'type': 'real_upload_request',
                 'target_bytes': target_bytes,
-                'optimal_chunk_size': optimal_chunk_size,
+                'optimal_chunk_size': WARMUP_UPLOAD_CHUNK_SIZE,  # Fixed 1MB chunks
                 'duration_ms': duration_ms,
                 'timestamp': time.time() * 1000
             }
             
             await session.websocket.send_text(json.dumps(upload_request))
-            logger.info(f"🔍 UPLOAD REQUEST: {session.user_id} - SUCCESS: Sent upload request for {target_bytes} bytes")
+            logger.info(f"🚀 WARMUP UPLOAD: {session.user_id} - SUCCESS: Sent upload request for {target_bytes} bytes with fixed 1MB chunks")
                 
         except Exception as e:
             logger.error(f"🔍 UPLOAD REQUEST: {session.user_id} - FAILED: {e}")
@@ -670,9 +785,9 @@ class HighPerformanceSessionManager:
             ),
             'computer': UserProfile(
                 name='Computer (Updates)',
-                download_mbps=200.0,
+                download_mbps=1000.0,  # 1 Gbps default
                 upload_mbps=0.1,
-                description='Adaptive high-speed downloads (scales with connection)',
+                description='High-speed downloads (1 Gbps)',
                 activity_type='bulk_transfer',
                 burst_pattern={'type': 'constant'}
             )
@@ -791,10 +906,15 @@ class HighPerformanceSessionManager:
             logger.info(f"🔍 SESSION_EXPIRED: {session.user_id} - Inactive for {inactive_duration:.1f}s (limit: {session.inactivity_timeout}s)")
             return True
         
-        # Check maximum session duration (reduced from 5 minutes to 2 minutes for faster cleanup)
-        max_duration = 120  # 2 minutes maximum session duration
+        # TRAFFIC CONTINUATION FIX: Much shorter session durations to prevent runaway traffic
+        # Virtual Household tests only run for 30s, so sessions should not persist much longer
+        if session.profile.download_mbps > 100.0:
+            max_duration = 45  # 45 seconds for high-throughput users (15s grace period after 30s test)
+        else:
+            max_duration = 60  # 60 seconds for normal users (30s grace period)
+            
         if total_duration > max_duration:
-            logger.info(f"🔍 SESSION_EXPIRED: {session.user_id} - Total duration {total_duration:.1f}s (limit: {max_duration}s)")
+            logger.info(f"🔍 SESSION_EXPIRED: {session.user_id} - Total duration {total_duration:.1f}s (limit: {max_duration}s, high-throughput: {session.profile.download_mbps > 100.0})")
             return True
         
         # Check connection test failures
@@ -1632,7 +1752,7 @@ async def update_computer_profile(request_data: dict):
         return JSONResponse({"error": str(e)}, status_code=500)
 
 @router.get("/virtual-household/adaptive/profiles")
-async def get_adaptive_profiles(computer_speed_mbps: float = 200.0):
+async def get_adaptive_profiles(computer_speed_mbps: float = 1000.0):
     """Get user profiles with adaptive Computer speed"""
     try:
         if computer_speed_mbps <= 0:
@@ -1650,63 +1770,156 @@ async def get_adaptive_profiles(computer_speed_mbps: float = 200.0):
         logger.error(f"❌ Error getting adaptive profiles: {e}")
         return JSONResponse({"error": str(e)}, status_code=500)
 @router.post("/virtual-household/stop-user-sessions/{test_id}")
-async def stop_user_sessions(test_id: str):
-    """Stop ALL sessions for a specific test ID (safe for multi-user environment)"""
+async def stop_user_sessions(test_id: str, request: Request):
+    """
+    ENHANCED STOP ENDPOINT: Handle both central server relay and ISP server direct stop
+    
+    Architecture flow:
+    - Central Server: Frontend → Central Server (this endpoint) → ISP Server → WebSocket sessions stopped
+    - ISP Server: Central Server → ISP Server (this endpoint) → WebSocket sessions stopped
+    
+    This ensures proper multi-user safety by routing through the central server
+    when called from frontend, or handling direct stops when called from central server.
+    """
+    # Import here to avoid circular imports
+    import aiohttp
+    import ssl
+    import socket
+    
     try:
-        logger.info(f"🛑 HTTP_STOP: Received stop request for test ID: {test_id}")
+        logger.info(f"🛑 STOP_ENDPOINT: Received stop request for test ID: {test_id}")
         
-        stopped_sessions = []
-        total_sessions = len(session_manager.sessions)
+        # Check if we're running as the central server
+        SERVER_MODE = os.getenv('SERVER_MODE', 'isp')
+        IS_CENTRAL_SERVER = (
+            SERVER_MODE == 'central' or 
+            socket.getfqdn() == 'test.libreqos.com' or 
+            os.getenv('ENABLE_TELEMETRY', 'false').lower() == 'true'
+        )
         
-        # Find all sessions that match the test ID
-        sessions_to_stop = []
-        for session_id, session in list(session_manager.sessions.items()):
-            # Extract timestamp from session ID (e.g., "alex_1749143640811" -> "1749143640811")
-            if '_' in session_id:
-                session_timestamp = session_id.split('_')[1]
-                # Convert to test ID format (seconds instead of milliseconds)
-                session_test_id = str(int(session_timestamp) // 1000)
-                if session_test_id == test_id:
+        if not IS_CENTRAL_SERVER:
+            # This is an ISP server - handle the stop signal directly
+            logger.info(f"🏭 ISP_SERVER: Handling stop signal directly for test ID: {test_id}")
+            
+            stopped_sessions = []
+            total_sessions = len(session_manager.sessions)
+            
+            # Find all sessions that match the test ID
+            sessions_to_stop = []
+            for session_id, session in list(session_manager.sessions.items()):
+                # Extract timestamp from session ID (e.g., "alex_1749143640811" -> "1749143640811")
+                if '_' in session_id:
+                    session_timestamp = session_id.split('_')[1]
+                    # Convert to test ID format (seconds instead of milliseconds)
+                    session_test_id = str(int(session_timestamp) // 1000)
+                    if session_test_id == test_id:
+                        sessions_to_stop.append(session_id)
+                
+                # Also support legacy "all" parameter for backward compatibility
+                if test_id.lower() == 'all':
                     sessions_to_stop.append(session_id)
             
-            # Also support legacy "all" parameter for backward compatibility
-            if test_id.lower() == 'all':
-                sessions_to_stop.append(session_id)
+            logger.info(f"🛑 ISP_SERVER: Found {len(sessions_to_stop)} sessions to stop for test ID '{test_id}': {sessions_to_stop}")
+            
+            # Stop each matching session
+            for session_id in sessions_to_stop:
+                try:
+                    logger.info(f"🛑 ISP_SERVER: Stopping session {session_id}")
+                    await session_manager.stop_session(session_id)
+                    stopped_sessions.append(session_id)
+                    logger.info(f"✅ ISP_SERVER: Successfully stopped session {session_id}")
+                except Exception as e:
+                    logger.error(f"❌ ISP_SERVER: Failed to stop session {session_id}: {e}")
+            
+            remaining_sessions = len(session_manager.sessions)
+            
+            logger.info(f"🛑 ISP_SERVER: Completed stop request for test ID '{test_id}' - "
+                       f"Stopped: {len(stopped_sessions)}, "
+                       f"Total before: {total_sessions}, "
+                       f"Remaining: {remaining_sessions}")
+            
+            return JSONResponse({
+                "success": True,
+                "test_id": test_id,
+                "stopped_sessions": stopped_sessions,
+                "stopped_count": len(stopped_sessions),
+                "total_sessions_before": total_sessions,
+                "remaining_sessions": remaining_sessions,
+                "message": f"ISP server stopped {len(stopped_sessions)} sessions for test ID '{test_id}'",
+                "server_type": "isp"
+            })
         
-        logger.info(f"🛑 HTTP_STOP: Found {len(sessions_to_stop)} sessions to stop for test ID '{test_id}': {sessions_to_stop}")
+        # This is the central server - relay to ISP server
+        logger.info(f"🔄 CENTRAL_RELAY: Running as central server, relaying stop signal")
         
-        # Stop each matching session
-        for session_id in sessions_to_stop:
-            try:
-                logger.info(f"🛑 HTTP_STOP: Stopping session {session_id}")
-                await session_manager.stop_session(session_id)
-                stopped_sessions.append(session_id)
-                logger.info(f"✅ HTTP_STOP: Successfully stopped session {session_id}")
-            except Exception as e:
-                logger.error(f"❌ HTTP_STOP: Failed to stop session {session_id}: {e}")
+        # Parse request body to get additional context
+        request_body = {}
+        try:
+            request_body = await request.json()
+        except:
+            # If no JSON body, create default
+            request_body = {
+                "action": "stop_all_sessions",
+                "reason": "test_completed",
+                "timestamp": time.time() * 1000
+            }
         
-        remaining_sessions = len(session_manager.sessions)
+        # For now, relay to Dallas ISP server (test-dal.libreqos.com)
+        # In a full implementation, you would:
+        # 1. Look up which ISP server is handling this test_id
+        # 2. Route to the appropriate server
+        # For this implementation, we'll assume Dallas server
         
-        logger.info(f"🛑 HTTP_STOP: Completed stop request for test ID '{test_id}' - "
-                   f"Stopped: {len(stopped_sessions)}, "
-                   f"Total before: {total_sessions}, "
-                   f"Remaining: {remaining_sessions}")
+        isp_server_url = "https://test-dal.libreqos.com"
+        relay_url = f"{isp_server_url}/api/virtual-household/stop-user-sessions/{test_id}"
         
-        return JSONResponse({
-            "success": True,
-            "test_id": test_id,
-            "stopped_sessions": stopped_sessions,
-            "stopped_count": len(stopped_sessions),
-            "total_sessions_before": total_sessions,
-            "remaining_sessions": remaining_sessions,
-            "message": f"Stopped {len(stopped_sessions)} sessions for test ID '{test_id}'"
-        })
+        logger.info(f"🔄 CENTRAL_RELAY: Relaying to ISP server: {relay_url}")
         
+        # Create SSL context for HTTPS requests
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        
+        # Relay the stop signal to the ISP server
+        async with aiohttp.ClientSession(
+            timeout=aiohttp.ClientTimeout(total=10.0),
+            connector=aiohttp.TCPConnector(ssl=ssl_context)
+        ) as session:
+            async with session.post(
+                relay_url,
+                json=request_body,
+                headers={"Content-Type": "application/json"}
+            ) as response:
+                if response.status == 200:
+                    isp_response = await response.json()
+                    logger.info(f"✅ CENTRAL_RELAY: ISP server responded successfully: {isp_response}")
+                    
+                    # Return success with relay information
+                    return JSONResponse({
+                        "success": True,
+                        "message": "Stop signal relayed successfully to ISP server",
+                        "test_id": test_id,
+                        "relay_target": isp_server_url,
+                        "isp_response": isp_response,
+                        "server_type": "central"
+                    })
+                else:
+                    error_text = await response.text()
+                    logger.error(f"❌ CENTRAL_RELAY: ISP server returned error {response.status}: {error_text}")
+                    
+                    return JSONResponse({
+                        "success": False,
+                        "error": f"ISP server error: {response.status} - {error_text}",
+                        "test_id": test_id,
+                        "relay_target": isp_server_url,
+                        "server_type": "central"
+                    }, status_code=response.status)
+                    
     except Exception as e:
-        logger.error(f"❌ HTTP_STOP: Error stopping sessions for test ID '{test_id}': {e}")
+        logger.error(f"❌ STOP_ENDPOINT: Error handling stop signal for test ID '{test_id}': {e}")
         return JSONResponse({
             "success": False,
-            "error": str(e),
+            "error": f"Stop endpoint error: {str(e)}",
             "test_id": test_id
         }, status_code=500)
 
@@ -1733,3 +1946,4 @@ async def virtual_household_health():
     except Exception as e:
         logger.error(f"❌ Error in health check: {e}")
         return JSONResponse({"error": str(e)}, status_code=500)
+

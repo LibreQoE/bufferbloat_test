@@ -34,6 +34,9 @@ from websocket_virtual_household import (
     UserProfile
 )
 
+# Import rate limiter for DDOS protection
+from rate_limiter import rate_limiter
+
 logger = logging.getLogger(__name__)
 
 class SingleUserProcessServer:
@@ -59,6 +62,9 @@ class SingleUserProcessServer:
         # Setup routes
         self._setup_routes()
         
+        # Flag to track if shared endpoints are set up
+        self._shared_endpoints_ready = False
+        
         # Performance tracking
         self.stats = {
             'connections': 0,
@@ -68,6 +74,41 @@ class SingleUserProcessServer:
         }
         
         logger.info(f"🚀 {user_type.title()} Process Server initialized on port {port}")
+    
+    async def _setup_shared_endpoints(self):
+        """Setup shared endpoints with rate limiting for worker process"""
+        try:
+            # Import shared endpoint modules
+            from endpoints.download import create_download_endpoint, create_netflix_endpoint
+            from endpoints.upload import create_upload_endpoint
+            from endpoints.ping import create_ping_endpoint
+            
+            # Determine traffic pattern based on user type
+            traffic_patterns = {
+                'jake': 'bursty_netflix',      # Netflix streaming
+                'alex': 'steady_web',          # Gaming/web browsing
+                'sarah': 'adaptive_streaming', # Video calls
+                'computer': 'background_batch' # System updates
+            }
+            
+            traffic_pattern = traffic_patterns.get(self.user_type, 'steady')
+            logger_prefix = f"[WORKER-{self.user_type}] "
+            
+            # Create endpoints with rate limiting
+            await create_download_endpoint(self.app, logger_prefix, traffic_pattern)
+            await create_upload_endpoint(self.app, logger_prefix, traffic_pattern)
+            await create_ping_endpoint(self.app, logger_prefix)
+            
+            # Netflix endpoint for Jake, regular download for others
+            if self.user_type == 'jake':
+                await create_netflix_endpoint(self.app, logger_prefix, burst_mode=True, quality="1080p")
+            else:
+                await create_netflix_endpoint(self.app, logger_prefix, burst_mode=False, quality="720p")
+            
+            logger.info(f"✅ {self.user_type.title()} shared endpoints setup with rate limiting")
+            
+        except Exception as e:
+            logger.error(f"❌ Error setting up shared endpoints for {self.user_type}: {e}")
     
     def _create_optimized_session_manager(self) -> HighPerformanceSessionManager:
         """Create session manager optimized for single user type"""
@@ -104,6 +145,26 @@ class SingleUserProcessServer:
             user_id = f"{self.user_type}_{int(time.time() * 1000)}"  # Unique ID
             logger.info(f"🔌 {self.user_type.title()} WebSocket connection: {user_id}")
             
+            # Check WebSocket rate limits before accepting connection
+            try:
+                # Extract IP from WebSocket connection
+                client_ip = websocket.client.host if websocket.client else "unknown"
+                
+                # Create mock request for rate limiter
+                class MockRequest:
+                    def __init__(self, ip):
+                        self.client_ip = ip
+                        self.headers = {}
+                        self.client = type('obj', (object,), {'host': ip})()
+                
+                mock_request = MockRequest(client_ip)
+                await rate_limiter.check_websocket_limit(mock_request)
+                
+            except Exception as e:
+                logger.warning(f"WebSocket rate limit exceeded for {self.user_type} from {client_ip}: {e}")
+                await websocket.close(code=1013, reason="Too many WebSocket connections from your IP")
+                return
+            
             try:
                 # Start session with optimized manager
                 if not await self.session_manager.start_session(user_id, websocket):
@@ -119,7 +180,17 @@ class SingleUserProcessServer:
             except Exception as e:
                 logger.error(f"❌ {self.user_type.title()} WebSocket error for {user_id}: {e}")
             finally:
-                # Cleanup
+                # Cleanup WebSocket rate limit tracking
+                try:
+                    mock_request = type('obj', (object,), {
+                        'client': type('obj', (object,), {'host': client_ip})(),
+                        'headers': {}
+                    })()
+                    await rate_limiter.release_websocket_connection(mock_request)
+                except:
+                    pass  # Ignore errors in cleanup
+                
+                # Cleanup session
                 await self.session_manager.stop_session(user_id)
                 logger.info(f"🧹 {self.user_type.title()} session cleaned up: {user_id}")
         
@@ -384,6 +455,11 @@ class SingleUserProcessServer:
     
     async def start(self, ssl_keyfile=None, ssl_certfile=None):
         """Start the user process server with optional SSL support"""
+        # Setup shared endpoints before starting server
+        if not self._shared_endpoints_ready:
+            await self._setup_shared_endpoints()
+            self._shared_endpoints_ready = True
+        
         if ssl_keyfile and ssl_certfile:
             logger.info(f"🔒 Starting {self.user_type.title()} Process Server with HTTPS on port {self.port}")
         else:

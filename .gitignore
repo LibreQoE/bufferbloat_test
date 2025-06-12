@@ -1,2 +1,64 @@
 # Claude Code configuration
 CLAUDE.md
+
+# Central server components (DO NOT PUBLISH)
+central_server/
+libreqos-central.service
+install_central_service.sh
+
+# Server discovery and token authentication
+server/token_auth.py
+server/server_registry.json
+
+# Telemetry system (should not be public)
+server/telemetry.py
+
+# Telemetry database and configs
+/var/lib/libreqos_test/
+*.db
+*.db-journal
+
+# SSL certificates
+ssl/
+*.pem
+*.key
+*.crt
+*.csr
+/etc/letsencrypt/
+
+# Environment files with secrets
+.env
+.env.*
+env/
+venv/
+
+# Sensitive configuration
+/etc/lqos_test.conf
+config.production.json
+**/config.prod.*
+
+# JWT secrets and keys
+jwt_secret.txt
+jwt_key*
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+
+# Logs that might contain sensitive data
+*.log
+logs/
+/var/log/libreqos*/
+
+# Local development
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db

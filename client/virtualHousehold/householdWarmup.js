@@ -97,10 +97,14 @@ class HouseholdWarmup {
 
     async _startBulkDownload() {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), this.duration + 1000);
+        // Greatly increased timeout: duration + 30 seconds to allow for TCP ramp-up and auth overhead
+        const timeoutId = setTimeout(() => controller.abort(), this.duration + 30000);
 
         try {
-            const response = await fetch('/api/warmup/bulk-download', {
+            // Import server discovery for distributed architecture
+            const { serverDiscovery } = await import('../discovery.js');
+            
+            const response = await serverDiscovery.makeRequest('/api/warmup/bulk-download', {
                 method: 'GET',
                 signal: controller.signal
             });

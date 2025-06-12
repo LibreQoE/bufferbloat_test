@@ -33,7 +33,7 @@ RUN chmod +x /app/docker-entrypoint.sh
 # Main server (HTTP/HTTPS)
 EXPOSE 8000 443
 # Ping server
-EXPOSE 8085
+EXPOSE 8005
 # User process servers
 EXPOSE 8001 8002 8003 8004
 
@@ -44,7 +44,7 @@ ENV PYTHONDONTWRITEBYTECODE=1
 # Add comprehensive healthcheck to ensure all services are ready
 HEALTHCHECK --interval=15s --timeout=10s --start-period=45s --retries=5 \
     CMD curl -f http://localhost:8000/health && \
-        curl -f http://localhost:8085/ping && \
+        curl -f http://localhost:8005/ping && \
         curl -f http://localhost:8001/health && \
         curl -f http://localhost:8002/health && \
         curl -f http://localhost:8003/health && \

@@ -6,6 +6,7 @@
 import { generateTestData as xoshiroGenerateTestData, getPooledTestData, initializeDataPools } from './xoshiro.js';
 import { logWithLevel } from './config.js';
 import { getCurrentPhase } from './ui.js';
+import { serverDiscovery } from './discovery.js';
 
 /**
  * Create standardized headers for upload requests to ensure TCP connection reuse
@@ -108,7 +109,7 @@ class StreamManager {
                 headers['X-Speed-Test'] = 'true';
             }
             
-            stream.promise = fetch('/download', {
+            stream.promise = serverDiscovery.makeRequest('/download', {
                 method: 'GET',
                 signal,
                 cache: 'no-store',
@@ -276,10 +277,10 @@ class StreamManager {
         // Get a chunk to upload
         const chunk = stream.dataChunks[0];
         
-        // Create a controller for this upload with a longer timeout (5 seconds)
+        // Create a controller for this upload with a longer timeout (15 seconds)
         const controller = new AbortController();
         const signal = controller.signal;
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+        const timeoutId = setTimeout(() => controller.abort(), 15000); // 15 second timeout
         
         try {
             // Log chunk size before upload
@@ -295,14 +296,14 @@ class StreamManager {
                 console.log(`Stream ${stream.id} is in ${phaseInfo} phase`);
             }
             
-            // Perform the upload with retry logic
+            // Perform the upload with retry logic (reduced retries to prevent spam)
             let retries = 0;
-            const maxRetries = 2;
+            const maxRetries = 1; // Reduced from 2 to 1 to prevent request spam
             let response = null;
             
             while (retries <= maxRetries) {
                 try {
-                    response = await fetch('/upload', {
+                    response = await serverDiscovery.makeRequest('/upload', {
                         method: 'POST',
                         signal,
                         headers: createUploadHeaders({
@@ -319,13 +320,13 @@ class StreamManager {
                     } else {
                         retries++;
                         if (retries <= maxRetries) {
-                            await new Promise(resolve => setTimeout(resolve, 100)); // Wait 100ms before retry
+                            await new Promise(resolve => setTimeout(resolve, 500)); // Wait 500ms before retry
                         }
                     }
                 } catch (fetchError) {
                     retries++;
                     if (retries <= maxRetries && fetchError.name !== 'AbortError') {
-                        await new Promise(resolve => setTimeout(resolve, 100)); // Wait 100ms before retry
+                        await new Promise(resolve => setTimeout(resolve, 500)); // Wait 500ms before retry
                     } else {
                         throw fetchError; // Rethrow if max retries reached or if aborted
                     }

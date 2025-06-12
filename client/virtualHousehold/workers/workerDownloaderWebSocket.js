@@ -179,9 +179,59 @@ class WorkerDownloaderWebSocket {
         }
     }
     
+    handleMultistreamMetadata(message) {
+        // Track multistream metadata
+        if (!this.multistreamState) {
+            this.multistreamState = {
+                enabled: true,
+                streams: {},
+                expectedChunk: null
+            };
+            console.log('🚀 MULTISTREAM: Enabled for high-throughput download');
+        }
+        
+        // Store metadata for the next binary chunk
+        this.multistreamState.expectedChunk = {
+            stream_id: message.stream_id,
+            chunk_id: message.chunk_id,
+            data_size: message.data_size,
+            timestamp: message.timestamp
+        };
+        
+        console.log(`🚀 STREAM-${message.stream_id}: Expecting chunk ${message.chunk_id} (${message.data_size} bytes)`);
+    }
+    
     handleDownloadChunk(data) {
         const now = performance.now();
         const chunkSize = data.byteLength;
+        
+        // Handle multistream chunk if metadata is available
+        if (this.multistreamState && this.multistreamState.expectedChunk) {
+            const expected = this.multistreamState.expectedChunk;
+            
+            // Validate chunk size matches expected
+            if (chunkSize === expected.data_size) {
+                console.log(`🚀 STREAM-${expected.stream_id}: Received chunk ${expected.chunk_id} (${chunkSize} bytes) ✅`);
+                
+                // Track per-stream statistics
+                if (!this.multistreamState.streams[expected.stream_id]) {
+                    this.multistreamState.streams[expected.stream_id] = {
+                        chunks: 0,
+                        bytes: 0,
+                        lastChunk: 0
+                    };
+                }
+                
+                this.multistreamState.streams[expected.stream_id].chunks++;
+                this.multistreamState.streams[expected.stream_id].bytes += chunkSize;
+                this.multistreamState.streams[expected.stream_id].lastChunk = now;
+            } else {
+                console.warn(`🚀 STREAM-${expected.stream_id}: Size mismatch! Expected ${expected.data_size}, got ${chunkSize}`);
+            }
+            
+            // Clear expected chunk
+            this.multistreamState.expectedChunk = null;
+        }
         
         // Update download statistics
         this.downloadState.bytesReceived += chunkSize;
@@ -264,6 +314,9 @@ class WorkerDownloaderWebSocket {
             case 'download_stopped':
                 console.log('📥 Bulk download stopped on server');
                 this.downloadState.active = false;
+                break;
+            case 'multistream_data':
+                this.handleMultistreamMetadata(message);
                 break;
             case 'error':
                 console.error('❌ Server error:', message.error);

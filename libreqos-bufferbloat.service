@@ -1,6 +1,8 @@
 [Unit]
 Description=LibreQoS Bufferbloat Test Server
-After=network.target
+After=network-online.target
+Wants=network-online.target
+Requires=network.target
 
 [Service]
 Type=simple
@@ -15,8 +17,8 @@ CapabilityBoundingSet=CAP_NET_BIND_SERVICE
 ExecStop=/bin/bash -c 'pkill -9 -f "multiprocess.py" || true; pkill -9 -f "simple_user_process.py" || true'
 Restart=on-failure
 RestartSec=10
-TimeoutStartSec=30
-TimeoutStopSec=15
+TimeoutStartSec=60
+TimeoutStopSec=30
 KillMode=control-group
 KillSignal=SIGTERM
 SendSIGKILL=yes

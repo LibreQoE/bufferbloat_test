@@ -46,7 +46,7 @@ docker-compose logs -f libreqos-bufferbloat
 The application consists of several services running in a single container:
 
 - **Main Server** (port 8000): Serves the web interface and handles HTTP requests
-- **Ping Server** (port 8085): Dedicated low-latency ping endpoint
+- **Ping Server** (port 8005): Dedicated low-latency ping endpoint
 - **User Processes** (ports 8001-8004): Simulate different user types:
   - Port 8001: Jake (Netflix streaming simulation)
   - Port 8002: Alex (Gaming traffic simulation)  
@@ -59,7 +59,7 @@ The application consists of several services running in a single container:
 |---------------|---------------|---------|-------------|
 | 8000 | 80 | Main Server | Web interface (HTTP) |
 | 443 | 443 | Main Server | Web interface (HTTPS) |
-| 8085 | 8085 | Ping Server | Low-latency ping endpoint |
+| 8005 | 8005 | Ping Server | Low-latency ping endpoint |
 | 8001 | 8001 | Jake Process | Netflix streaming simulation |
 | 8002 | 8002 | Alex Process | Gaming traffic simulation |
 | 8003 | 8003 | Sarah Process | Video conference simulation |
@@ -175,7 +175,7 @@ Once the application is running, navigate to:
 docker-compose logs libreqos-bufferbloat
 
 # Verify port availability
-netstat -tulpn | grep -E ':(80|443|8001|8002|8003|8004|8085)'
+netstat -tulpn | grep -E ':(80|443|8001|8002|8003|8004|8005)'
 
 # Restart services
 docker-compose restart
@@ -185,7 +185,7 @@ docker-compose restart
 ```bash
 # Check individual service health
 curl http://localhost:8000/health
-curl http://localhost:8085/ping
+curl http://localhost:8005/ping
 curl http://localhost:8001/health
 curl http://localhost:8002/health
 curl http://localhost:8003/health

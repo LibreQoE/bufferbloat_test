@@ -60,18 +60,30 @@ class SimpleMultiProcessStarter:
             logger.info("✅ All user processes started successfully")
             logger.info(f"📋 Process ports: {self.process_manager.user_ports}")
             
-            # Wait a moment for processes to fully initialize
+            # Wait longer for processes to fully initialize (especially on boot)
             logger.info("⏳ Waiting for processes to initialize...")
-            await asyncio.sleep(3.0)
+            await asyncio.sleep(8.0)  # Increased from 3s to 8s for boot stability
             
-            # Verify all processes are healthy
-            health = self.process_manager.get_process_health()
-            healthy_count = sum(1 for h in health.values() if h['is_healthy'])
-            total_count = len(health)
-            
-            if healthy_count != total_count:
-                logger.error(f"❌ Only {healthy_count}/{total_count} processes are healthy")
-                return False
+            # Verify all processes are healthy with retry logic (for boot scenarios)
+            for attempt in range(3):
+                health = self.process_manager.get_process_health()
+                healthy_count = sum(1 for h in health.values() if h['is_healthy'])
+                total_count = len(health)
+                
+                if healthy_count == total_count:
+                    break
+                
+                logger.warning(f"⚠️ Attempt {attempt + 1}/3: Only {healthy_count}/{total_count} processes healthy")
+                if attempt < 2:  # Not the last attempt
+                    logger.info("🔄 Retrying health check in 5 seconds...")
+                    await asyncio.sleep(5.0)
+                else:
+                    logger.error(f"❌ Final attempt: Only {healthy_count}/{total_count} processes are healthy")
+                    # Log which processes are unhealthy
+                    for process_name, health_info in health.items():
+                        if not health_info['is_healthy']:
+                            logger.error(f"❌ Unhealthy process: {process_name} - {health_info}")
+                    return False
             
             logger.info(f"✅ All {total_count} processes are healthy and ready")
             
@@ -79,9 +91,13 @@ class SimpleMultiProcessStarter:
             if self.ssl_enabled:
                 logger.info(f"🔒 Starting main server with HTTPS on port {port}...")
             else:
-                logger.info(f"� Starting main server on port {port}...")
+                logger.info(f"🌐 Starting main server on port {port}...")
             self.main_server_task = asyncio.create_task(self._run_main_server(port))
-            self.ping_server_task = asyncio.create_task(self._run_ping_server(8085))
+            
+            # Small delay before starting ping server to avoid port conflicts
+            await asyncio.sleep(2.0)
+            logger.info("🎯 Starting dedicated ping server on port 8005...")
+            self.ping_server_task = asyncio.create_task(self._run_ping_server(8005))
             
             self.running = True
             logger.info("🎉 Simple Multi-Process Virtual Household System is running!")
@@ -90,7 +106,7 @@ class SimpleMultiProcessStarter:
             protocol = "https" if self.ssl_enabled else "http"
             ws_protocol = "wss" if self.ssl_enabled else "ws"
             logger.info(f"🌐 Main server: {protocol}://localhost:{port}")
-            logger.info(f"🎯 Ping server: {protocol}://localhost:8085")
+            logger.info(f"🎯 Ping server: {protocol}://localhost:8005")
             logger.info("� Virtual Household endpoints:")
             
             for user_type, port_num in self.process_manager.user_ports.items():

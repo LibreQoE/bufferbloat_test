@@ -4,6 +4,7 @@
  */
 
 import { initWithCryptoSeed, fillRandomBytes } from './xoshiro.js';
+import { serverDiscovery } from './discovery.js';
 
 /**
  * Create standardized headers for upload requests to ensure TCP connection reuse
@@ -254,7 +255,7 @@ async function startDownloadSaturation(isDiscovery = false, fixedThroughput = 0,
         
         const stream = {
             controller: controller,
-            promise: fetch('/download', {
+            promise: serverDiscovery.makeRequest('/download', {
                 method: 'GET',
                 signal: signal,
                 cache: 'no-store',
@@ -316,7 +317,7 @@ async function startDownloadSaturation(isDiscovery = false, fixedThroughput = 0,
             
             const stream = {
                 controller: controller,
-                promise: fetch('/download', {
+                promise: serverDiscovery.makeRequest('/download', {
                     method: 'GET',
                     signal: signal,
                     cache: 'no-store',
@@ -1023,7 +1024,7 @@ async function runUploadStream(streamIndex, dataChunks, maxPendingUploads = MAX_
             // Track request start time for response time monitoring
             const requestStartTime = performance.now();
             
-            const response = await fetch('/upload', {
+            const response = await serverDiscovery.makeRequest('/upload', {
                 method: 'POST',
                 signal: controller.signal,
                 headers: createUploadHeaders(),
@@ -1846,7 +1847,7 @@ async function startBidirectionalSaturation(
         
         const stream = {
             controller: controller,
-            promise: fetch('/download', {
+            promise: serverDiscovery.makeRequest('/download', {
                 method: 'GET',
                 signal: signal,
                 cache: 'no-store',
@@ -2190,7 +2191,7 @@ function applyOptimalDownloadParams(params) {
             
             downloadStreams[streamIndex] = {
                 controller: controller,
-                promise: fetch('/download', {
+                promise: serverDiscovery.makeRequest('/download', {
                     method: 'GET',
                     signal: signal,
                     cache: 'no-store',

@@ -55,6 +55,31 @@ docs/
 # Service files
 *.service
 
+# CRITICAL: Central server components (DO NOT INCLUDE)
+central_server/
+libreqos-central.service
+install_central_service.sh
+
+# CRITICAL: Authentication and discovery secrets
+server/token_auth.py
+server/server_registry.json
+server/telemetry.py
+
+# Environment and config files with secrets
+.env
+.env.*
+/etc/lqos_test.conf
+config.production.json
+**/config.prod.*
+jwt_secret.txt
+jwt_key*
+CLAUDE.md
+
+# Database files
+*.db
+*.db-journal
+/var/lib/libreqos_test/
+
 # Temporary files
 *.tmp
 *.temp

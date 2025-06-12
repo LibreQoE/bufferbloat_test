@@ -17,6 +17,8 @@ import {
     calculateTotalGradeFromLatency
 } from './shared/gradeCalculations.js';
 
+import { telemetryManager } from './telemetry.js';
+
 /**
  * Calculate percentile from an array of values
  * @param {Array} values - Array of numeric values
@@ -193,6 +195,30 @@ function analyzeAndDisplayResults(testData) {
         });
         
         console.log('✅ Single User Test results displayed using shared module system');
+        
+        // Submit telemetry data
+        const telemetryData = {
+            testType: 'single',
+            grades: {
+                download: downloadGrade,
+                upload: uploadGrade,
+                bidirectional: bidirectionalGrade,
+                overall: totalGrade
+            },
+            baselineLatency: baselineStats.average,
+            downloadLatencyIncrease: Math.round(downloadLatencyIncrease),
+            uploadLatencyIncrease: Math.round(uploadLatencyIncrease),
+            bidirectionalLatencyIncrease: Math.round(bidirectionalLatencyIncrease),
+            downloadThroughput: Math.round(downloadThroughputStats.median * 10) / 10,
+            uploadThroughput: Math.round(uploadThroughputStats.median * 10) / 10,
+            testDuration: 40 // Standard test duration
+        };
+        
+        telemetryManager.submitResults(telemetryData).then(result => {
+            console.log('Telemetry submission result:', result);
+        }).catch(error => {
+            console.error('Telemetry submission error:', error);
+        });
         
     } catch (error) {
         console.error('Error analyzing and displaying results:', error);

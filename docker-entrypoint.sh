@@ -70,7 +70,7 @@ while [ $RETRY_COUNT -lt $MAX_RETRIES ]; do
     check_service "http://localhost:8000/health" "Main server" || ALL_READY=false
     
     # Check ping server
-    check_service "http://localhost:8085/ping" "Ping server" || ALL_READY=false
+    check_service "http://localhost:8005/ping" "Ping server" || ALL_READY=false
     
     # Check user processes
     check_service "http://localhost:8001/health" "Jake process" || ALL_READY=false
@@ -99,7 +99,7 @@ if [ "$SSL_ENABLED" = true ]; then
     echo "🔒 HTTPS server available at: https://localhost:443"
 fi
 echo "📊 Virtual Household Mode: Available on main server"
-echo "🏓 Ping server: http://localhost:8085"
+echo "🏓 Ping server: http://localhost:8005"
 
 # Keep the main process running and wait for signals
 wait $MAIN_PID
