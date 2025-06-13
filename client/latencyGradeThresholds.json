@@ -1,0 +1,33 @@
+{
+  "baseline": {
+    "description": "Baseline latency grading (absolute latency in ms)",
+    "unit": "ms",
+    "thresholds": [
+      {"threshold": 75, "grade": "A+", "description": "Excellent", "class": "a-plus"},
+      {"threshold": 100, "grade": "A", "description": "Very Good", "class": "a"},
+      {"threshold": 125, "grade": "B", "description": "Good", "class": "b"},
+      {"threshold": 150, "grade": "C", "description": "Fair", "class": "c"},
+      {"threshold": 175, "grade": "D", "description": "Poor", "class": "d"},
+      {"threshold": 200, "grade": "F", "description": "Very Poor", "class": "f"}
+    ]
+  },
+  "increase": {
+    "description": "Latency increase grading (bufferbloat measurement in ms)",
+    "unit": "ms",
+    "thresholds": [
+      {"threshold": 5, "grade": "A+", "description": "Excellent", "class": "a-plus"},
+      {"threshold": 25, "grade": "A", "description": "Very Good", "class": "a"},
+      {"threshold": 50, "grade": "B", "description": "Good", "class": "b"},
+      {"threshold": 75, "grade": "C", "description": "Fair", "class": "c"},
+      {"threshold": 100, "grade": "D", "description": "Poor", "class": "d"},
+      {"threshold": 200, "grade": "F", "description": "Very Poor", "class": "f"}
+    ]
+  },
+  "version": "1.0",
+  "updated": "2024-12-24",
+  "notes": [
+    "Baseline latency reflects overall connection quality and geographic factors",
+    "Latency increase measures bufferbloat - how much latency increases under load",
+    "Total grade = min(baseline_grade, average(download_bloat, upload_bloat, bidirectional_bloat))"
+  ]
+}

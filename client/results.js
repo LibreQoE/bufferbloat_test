@@ -13,6 +13,7 @@ import {
 
 import {
     determineGrade,
+    determineBaselineGrade,
     calculateTotalGrade,
     calculateTotalGradeFromLatency
 } from './shared/gradeCalculations.js';
@@ -89,7 +90,7 @@ function calculateStats(values) {
  * Analyze test results and display them using the shared results system
  * @param {Object} testData - Object containing test data
  */
-function analyzeAndDisplayResults(testData) {
+async function analyzeAndDisplayResults(testData) {
     try {
         const {
             baselineLatency,
@@ -150,24 +151,30 @@ function analyzeAndDisplayResults(testData) {
             filteredBidiUploadData.length > 0 ? filteredBidiUploadData : bidiUploadData
         );
         
-        // Calculate additional latency under load using average values
+        // Calculate loaded latency values using average values from full test phases
         // Use only the full test phases (not warmup) for grading
+        const downloadLoadedLatency = downloadStats.average;
+        const uploadLoadedLatency = uploadStats.average;
+        const bidirectionalLoadedLatency = bidirectionalStats.average;
+        
+        // Calculate latency increases for display purposes (still useful for user understanding)
         const downloadLatencyIncrease = downloadStats.average - baselineStats.average;
         const uploadLatencyIncrease = uploadStats.average - baselineStats.average;
         const bidirectionalLatencyIncrease = bidirectionalStats.average - baselineStats.average;
         
-        // Determine the grades for each phase
-        const downloadGrade = determineGrade(downloadLatencyIncrease);
-        const uploadGrade = determineGrade(uploadLatencyIncrease);
-        const bidirectionalGrade = determineGrade(bidirectionalLatencyIncrease);
+        // Determine the grades for each component using appropriate thresholds
+        const baselineGrade = await determineBaselineGrade(baselineStats.average);
+        const downloadGrade = await determineGrade(downloadLatencyIncrease);
+        const uploadGrade = await determineGrade(uploadLatencyIncrease);
+        const bidirectionalGrade = await determineGrade(bidirectionalLatencyIncrease);
         
-        // Calculate Total Grade based on average latency increase
-        // (downloadLatencyIncrease + uploadLatencyIncrease + bidirectionalLatencyIncrease) / 3
-        const totalGrade = calculateTotalGradeFromLatency(downloadLatencyIncrease, uploadLatencyIncrease, bidirectionalLatencyIncrease);
+        // Calculate Total Grade using new min(baseline, average_bloat) formula with latency increases
+        const totalGrade = await calculateTotalGradeFromLatency(baselineStats.average, downloadLatencyIncrease, uploadLatencyIncrease, bidirectionalLatencyIncrease);
         
         // Transform to unified format using adapter
         const adapter = createSingleUserAdapter();
         const unifiedData = adapter.transform({
+            baselineGrade,
             downloadGrade,
             uploadGrade,
             bidirectionalGrade,
@@ -200,12 +207,17 @@ function analyzeAndDisplayResults(testData) {
         const telemetryData = {
             testType: 'single',
             grades: {
+                baseline: baselineGrade,
                 download: downloadGrade,
                 upload: uploadGrade,
                 bidirectional: bidirectionalGrade,
                 overall: totalGrade
             },
             baselineLatency: baselineStats.average,
+            downloadLoadedLatency: Math.round(downloadLoadedLatency),
+            uploadLoadedLatency: Math.round(uploadLoadedLatency),
+            bidirectionalLoadedLatency: Math.round(bidirectionalLoadedLatency),
+            // Keep legacy fields for compatibility
             downloadLatencyIncrease: Math.round(downloadLatencyIncrease),
             uploadLatencyIncrease: Math.round(uploadLatencyIncrease),
             bidirectionalLatencyIncrease: Math.round(bidirectionalLatencyIncrease),

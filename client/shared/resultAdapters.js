@@ -37,6 +37,7 @@ class SingleUserAdapter {
      */
     transform(singleUserData) {
         const {
+            baselineGrade,
             downloadGrade,
             uploadGrade,
             bidirectionalGrade,
@@ -62,6 +63,18 @@ class SingleUserAdapter {
                 showApproved: ['A+', 'A'].includes(totalGrade.grade)
             },
             phases: [
+                {
+                    id: 'baseline',
+                    name: 'Baseline',
+                    grade: baselineGrade.grade,
+                    cssClass: baselineGrade.cssClass,
+                    metric: `${baselineStats.average.toFixed(1)}ms`,
+                    tooltip: {
+                        header: `Baseline Grade: ${baselineGrade.grade}`,
+                        content: `Baseline latency is ${baselineStats.average.toFixed(1)}ms — ${getPerformanceDescription(baselineGrade.grade)}`
+                    },
+                    showInShareImage: true
+                },
                 {
                     id: 'download',
                     name: 'Download',
@@ -142,19 +155,19 @@ class SingleUserAdapter {
     generateTotalGradeDescription(grade) {
         switch (grade) {
             case 'A+':
-                return 'exceptional overall bufferbloat performance across all test phases!';
+                return 'exceptional baseline latency and bufferbloat performance!';
             case 'A':
-                return 'excellent overall bufferbloat performance across all test phases!';
+                return 'excellent baseline latency and bufferbloat performance!';
             case 'B':
-                return 'good overall bufferbloat performance across all test phases.';
+                return 'good baseline latency and bufferbloat performance.';
             case 'C':
-                return 'fair overall bufferbloat performance across all test phases.';
+                return 'fair baseline latency and bufferbloat performance.';
             case 'D':
-                return 'poor overall bufferbloat performance across all test phases.';
+                return 'poor baseline latency and bufferbloat performance.';
             case 'F':
-                return 'very poor overall bufferbloat performance across all test phases.';
+                return 'very poor baseline latency and bufferbloat performance.';
             default:
-                return 'overall bufferbloat performance measured.';
+                return 'baseline latency and bufferbloat performance measured.';
         }
     }
 
@@ -183,39 +196,39 @@ class SingleUserAdapter {
                         <table class="calculation-table">
                             <thead>
                                 <tr>
-                                    <th>Latency Increase</th>
+                                    <th>Latency Value</th>
                                     <th>Grade</th>
                                     <th>Description</th>
                                 </tr>
                             </thead>
                             <tbody>
                                 <tr class="grade-row a-plus">
-                                    <td>&lt; 5 ms</td>
+                                    <td>&lt; 50 ms</td>
                                     <td><span class="grade-badge-small a-plus">A+</span></td>
                                     <td>Excellent - Virtually no bufferbloat</td>
                                 </tr>
                                 <tr class="grade-row a">
-                                    <td>5-30 ms</td>
+                                    <td>50-90 ms</td>
                                     <td><span class="grade-badge-small a">A</span></td>
                                     <td>Very Good - Minimal bufferbloat</td>
                                 </tr>
                                 <tr class="grade-row b">
-                                    <td>30-60 ms</td>
+                                    <td>90-100 ms</td>
                                     <td><span class="grade-badge-small b">B</span></td>
                                     <td>Good - Moderate bufferbloat</td>
                                 </tr>
                                 <tr class="grade-row c">
-                                    <td>60-200 ms</td>
+                                    <td>100-150 ms</td>
                                     <td><span class="grade-badge-small c">C</span></td>
                                     <td>Fair - Noticeable bufferbloat</td>
                                 </tr>
                                 <tr class="grade-row d">
-                                    <td>200-400 ms</td>
+                                    <td>150-175 ms</td>
                                     <td><span class="grade-badge-small d">D</span></td>
                                     <td>Poor - Significant bufferbloat</td>
                                 </tr>
                                 <tr class="grade-row f">
-                                    <td>≥ 400 ms</td>
+                                    <td>≥ 175 ms</td>
                                     <td><span class="grade-badge-small f">F</span></td>
                                     <td>Very Poor - Severe bufferbloat</td>
                                 </tr>
@@ -228,14 +241,20 @@ class SingleUserAdapter {
             <!-- Total Grade Explanation -->
             <div class="total-grade-explanation-section">
                 <h4>Total Grade Calculation</h4>
-                <p>Your <strong>Total Bufferbloat Grade</strong> is based on the average latency increase across all three test phases. We calculate the average of the latency increases in milliseconds, then convert that average to a letter grade using our standard grading scale.</p>
-                <p><strong>Formula:</strong> (Download Latency Increase + Upload Latency Increase + Bidirectional Latency Increase) ÷ 3 = Average Latency Increase</p>
-                <p><strong>Example:</strong> If you have latency increases of 15ms (Download), 25ms (Upload), and 35ms (Bidirectional), your average = (15+25+35)/3 = 25ms = A grade overall.</p>
+                <p>Your <strong>Total Grade</strong> considers both baseline latency and bufferbloat performance. A high baseline latency connection can't provide good real-time performance even with zero bufferbloat.</p>
+                <p><strong>New Formula:</strong> Total Grade = min(Baseline Grade, Average Bufferbloat Grade)</p>
+                <p><strong>Components:</strong></p>
+                <ul>
+                    <li><strong>Baseline Grade:</strong> Based on your idle connection latency</li>
+                    <li><strong>Average Bufferbloat Grade:</strong> Average of Download, Upload, and Bidirectional latency increases</li>
+                </ul>
+                <p><strong>Example:</strong> If you have 75ms baseline (B grade) with 10ms average bufferbloat increase (A+ grade), your total = min(B, A+) = B grade overall.</p>
             </div>
             
             <!-- Individual Grades Explanation -->
             <div class="individual-grades-explanation-section">
                 <h4>What Each Phase Tests</h4>
+                <p><strong>Baseline:</strong> Your idle connection latency without any load (foundation for all real-time performance)</p>
                 <p><strong>Download:</strong> How much latency increases when downloading large files (simulates streaming, software updates)</p>
                 <p><strong>Upload:</strong> How much latency increases when uploading data (simulates video calls, cloud backups)</p>
                 <p><strong>Bidirectional:</strong> How much latency increases during simultaneous heavy download and upload (simulates real-world mixed usage)</p>
@@ -245,42 +264,42 @@ class SingleUserAdapter {
                 <div class="grade-explanation a-plus">
                     <div class="grade-badge">A+</div>
                     <div class="grade-description">
-                        <h4>Excellent (0-5ms increase)</h4>
+                        <h4>Excellent (&lt; 50ms)</h4>
                         <p>Your connection has virtually no bufferbloat! Perfect for video calls, online gaming, and real-time applications. Your connection maintains low latency even under heavy load.</p>
                     </div>
                 </div>
                 <div class="grade-explanation a">
                     <div class="grade-badge">A</div>
                     <div class="grade-description">
-                        <h4>Very Good (5-30ms increase)</h4>
+                        <h4>Very Good (50-90ms)</h4>
                         <p>Minimal bufferbloat with excellent performance. Great for video calls, streaming, and gaming. You may notice slight delays only during very heavy usage.</p>
                     </div>
                 </div>
                 <div class="grade-explanation b">
                     <div class="grade-badge">B</div>
                     <div class="grade-description">
-                        <h4>Good (30-60ms increase)</h4>
+                        <h4>Good (90-100ms)</h4>
                         <p>Moderate bufferbloat that's generally acceptable. Good for most activities, though you might notice some lag during video calls or gaming when downloading large files.</p>
                     </div>
                 </div>
                 <div class="grade-explanation c">
                     <div class="grade-badge">C</div>
                     <div class="grade-description">
-                        <h4>Fair (60-200ms increase)</h4>
+                        <h4>Fair (100-150ms)</h4>
                         <p>Noticeable bufferbloat that affects performance. You'll likely experience lag during video calls, choppy streaming, and delayed responses in online games when your connection is busy.</p>
                     </div>
                 </div>
                 <div class="grade-explanation d">
                     <div class="grade-badge">D</div>
                     <div class="grade-description">
-                        <h4>Poor (200-400ms increase)</h4>
+                        <h4>Poor (150-175ms)</h4>
                         <p>Significant bufferbloat causing major performance issues. Video calls will be problematic, streaming may buffer frequently, and online gaming will be frustrating during heavy usage.</p>
                     </div>
                 </div>
                 <div class="grade-explanation f">
                     <div class="grade-badge">F</div>
                     <div class="grade-description">
-                        <h4>Very Poor (400ms+ increase)</h4>
+                        <h4>Very Poor (≥ 175ms)</h4>
                         <p>Severe bufferbloat making real-time applications nearly unusable. Video calls will drop frequently, streaming will buffer constantly, and online gaming will be extremely laggy when downloading or uploading.</p>
                     </div>
                 </div>

@@ -784,7 +784,7 @@ async function handleTestComplete() {
     console.log('Upload throughput data (bidirectional phase):', testData.uploadThroughput.bidirectional);
     
     // Analyze and display results
-    analyzeAndDisplayResults(testData);
+    await analyzeAndDisplayResults(testData);
 }
 
 // Removed complex parameter visualization - using simple warmup instead

@@ -108,6 +108,10 @@
                     <h3 class="section-title">Individual Phase Grades</h3>
                     <div class="grade-container">
                         <div class="grade-box">
+                            <h3>Baseline</h3>
+                            <div id="baselineGrade" class="grade"></div>
+                        </div>
+                        <div class="grade-box">
                             <h3>Download</h3>
                             <div id="downloadGrade" class="grade"></div>
                         </div>
@@ -131,63 +135,113 @@
                     </button>
                     <div id="explanationContent" class="explanation-content hidden">
                         <div class="explanation-intro">
-                            <p>Your bufferbloat grade shows how much extra latency (delay) your connection adds when under heavy load. Lower latency increase = better grade.</p>
+                            <p>Your bufferbloat grade measures both your connection's baseline latency and how much extra latency (delay) it adds when under heavy load. Lower latency values = better grades.</p>
                         </div>
                         
                         <!-- How Scores Are Calculated -->
                         <div class="calculation-explanation-section">
                             <h4>How Your Scores Are Calculated</h4>
-                            <p><strong>Latency Measurement:</strong> We measure your baseline latency (idle connection), then measure latency again during heavy network load to calculate the increase.</p>
+                            <p><strong>Latency Measurement:</strong> We measure your baseline latency (idle connection), then measure latency again during heavy network load to calculate both the absolute latency values and increases.</p>
                             <div class="calculation-details">
                                 <p><strong>Test Phases:</strong></p>
                                 <ul>
+                                    <li><strong>Baseline Phase:</strong> Measures your connection's inherent latency when idle</li>
                                     <li><strong>Download Phase:</strong> Saturates your download bandwidth while measuring latency increase</li>
                                     <li><strong>Upload Phase:</strong> Saturates your upload bandwidth while measuring latency increase</li>
                                     <li><strong>Bidirectional Phase:</strong> Saturates both download and upload simultaneously</li>
                                 </ul>
-                                <p><strong>Grade Calculation:</strong> Based on latency increase in milliseconds:</p>
-                                <div class="grade-calculation-table">
-                                    <table class="calculation-table">
-                                        <thead>
-                                            <tr>
-                                                <th>Latency Increase</th>
-                                                <th>Grade</th>
-                                                <th>Description</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            <tr class="grade-row a-plus">
-                                                <td>&lt; 5 ms</td>
-                                                <td><span class="grade-badge-small a-plus">A+</span></td>
-                                                <td>Excellent - Virtually no bufferbloat</td>
-                                            </tr>
-                                            <tr class="grade-row a">
-                                                <td>5-30 ms</td>
-                                                <td><span class="grade-badge-small a">A</span></td>
-                                                <td>Very Good - Minimal bufferbloat</td>
-                                            </tr>
-                                            <tr class="grade-row b">
-                                                <td>30-60 ms</td>
-                                                <td><span class="grade-badge-small b">B</span></td>
-                                                <td>Good - Moderate bufferbloat</td>
-                                            </tr>
-                                            <tr class="grade-row c">
-                                                <td>60-200 ms</td>
-                                                <td><span class="grade-badge-small c">C</span></td>
-                                                <td>Fair - Noticeable bufferbloat</td>
-                                            </tr>
-                                            <tr class="grade-row d">
-                                                <td>200-400 ms</td>
-                                                <td><span class="grade-badge-small d">D</span></td>
-                                                <td>Poor - Significant bufferbloat</td>
-                                            </tr>
-                                            <tr class="grade-row f">
-                                                <td>≥ 400 ms</td>
-                                                <td><span class="grade-badge-small f">F</span></td>
-                                                <td>Very Poor - Severe bufferbloat</td>
-                                            </tr>
-                                        </tbody>
-                                    </table>
+                                <p><strong>Grade Calculation:</strong> We use different thresholds for baseline latency and latency increases:</p>
+                                
+                                <div class="grade-calculation-tables">
+                                    <div class="baseline-table">
+                                        <h5>Baseline Latency Grading</h5>
+                                        <table class="calculation-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Baseline Latency</th>
+                                                    <th>Grade</th>
+                                                    <th>Description</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr class="grade-row a-plus">
+                                                    <td>&lt; 75 ms</td>
+                                                    <td><span class="grade-badge-small a-plus">A+</span></td>
+                                                    <td>Excellent connection quality</td>
+                                                </tr>
+                                                <tr class="grade-row a">
+                                                    <td>75-100 ms</td>
+                                                    <td><span class="grade-badge-small a">A</span></td>
+                                                    <td>Very good connection quality</td>
+                                                </tr>
+                                                <tr class="grade-row b">
+                                                    <td>100-125 ms</td>
+                                                    <td><span class="grade-badge-small b">B</span></td>
+                                                    <td>Good connection quality</td>
+                                                </tr>
+                                                <tr class="grade-row c">
+                                                    <td>125-150 ms</td>
+                                                    <td><span class="grade-badge-small c">C</span></td>
+                                                    <td>Fair connection quality</td>
+                                                </tr>
+                                                <tr class="grade-row d">
+                                                    <td>150-175 ms</td>
+                                                    <td><span class="grade-badge-small d">D</span></td>
+                                                    <td>Poor connection quality</td>
+                                                </tr>
+                                                <tr class="grade-row f">
+                                                    <td>≥ 175 ms</td>
+                                                    <td><span class="grade-badge-small f">F</span></td>
+                                                    <td>Very poor connection quality</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
+                                    
+                                    <div class="increase-table">
+                                        <h5>Latency Increase Grading (Bufferbloat)</h5>
+                                        <table class="calculation-table">
+                                            <thead>
+                                                <tr>
+                                                    <th>Latency Increase</th>
+                                                    <th>Grade</th>
+                                                    <th>Description</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                <tr class="grade-row a-plus">
+                                                    <td>&lt; 5 ms</td>
+                                                    <td><span class="grade-badge-small a-plus">A+</span></td>
+                                                    <td>Excellent - Virtually no bufferbloat</td>
+                                                </tr>
+                                                <tr class="grade-row a">
+                                                    <td>5-30 ms</td>
+                                                    <td><span class="grade-badge-small a">A</span></td>
+                                                    <td>Very Good - Minimal bufferbloat</td>
+                                                </tr>
+                                                <tr class="grade-row b">
+                                                    <td>30-60 ms</td>
+                                                    <td><span class="grade-badge-small b">B</span></td>
+                                                    <td>Good - Moderate bufferbloat</td>
+                                                </tr>
+                                                <tr class="grade-row c">
+                                                    <td>60-200 ms</td>
+                                                    <td><span class="grade-badge-small c">C</span></td>
+                                                    <td>Fair - Noticeable bufferbloat</td>
+                                                </tr>
+                                                <tr class="grade-row d">
+                                                    <td>200-400 ms</td>
+                                                    <td><span class="grade-badge-small d">D</span></td>
+                                                    <td>Poor - Significant bufferbloat</td>
+                                                </tr>
+                                                <tr class="grade-row f">
+                                                    <td>≥ 400 ms</td>
+                                                    <td><span class="grade-badge-small f">F</span></td>
+                                                    <td>Very Poor - Severe bufferbloat</td>
+                                                </tr>
+                                            </tbody>
+                                        </table>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -195,13 +249,14 @@
                         <!-- Total Grade Explanation -->
                         <div class="total-grade-explanation-section">
                             <h4>Total Grade Calculation</h4>
-                            <p>Your <strong>Total Bufferbloat Grade</strong> combines all three test phases with equal weighting (33.33% each). Each letter grade is converted to a numeric value (A+=6, A=5, B=4, C=3, D=2, F=1), averaged, then converted back to a letter grade.</p>
-                            <p><strong>Example:</strong> If you get A+ (6), B (4), and A (5), your total = (6+4+5)/3 = 5.0 = A grade overall.</p>
+                            <p>Your <strong>Total Bufferbloat Grade</strong> is calculated as the minimum of your baseline latency grade and the average of your three bufferbloat test phases (download, upload, bidirectional). This ensures that both your connection's inherent latency and its behavior under load are properly weighted.</p>
+                            <p><strong>Example:</strong> If your baseline is A+ (65ms) and your bufferbloat phases average to A (25ms increase), your total grade is A+. If your baseline is B (110ms) but bufferbloat phases average to A+ (3ms increase), your total grade is B.</p>
                         </div>
                         
                         <!-- Individual Grades Explanation -->
                         <div class="individual-grades-explanation-section">
                             <h4>What Each Phase Tests</h4>
+                            <p><strong>Baseline:</strong> Your connection's inherent latency when idle (measures base network quality)</p>
                             <p><strong>Download:</strong> How much latency increases when downloading large files (simulates streaming, software updates)</p>
                             <p><strong>Upload:</strong> How much latency increases when uploading data (simulates video calls, cloud backups)</p>
                             <p><strong>Bidirectional:</strong> How much latency increases during simultaneous heavy download and upload (simulates real-world mixed usage)</p>
@@ -211,7 +266,7 @@
                             <div class="grade-explanation a-plus">
                                 <div class="grade-badge">A+</div>
                                 <div class="grade-description">
-                                    <h4>Excellent (0-5ms increase)</h4>
+                                    <h4>Excellent (&lt; 5ms increase)</h4>
                                     <p>Your connection has virtually no bufferbloat! Perfect for video calls, online gaming, and real-time applications. Your connection maintains low latency even under heavy load.</p>
                                 </div>
                             </div>

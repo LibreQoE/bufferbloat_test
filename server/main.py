@@ -500,21 +500,7 @@ async def revoke_token(request: Request):
         logger.error(f"❌ Error revoking tokens: {e}")
         raise HTTPException(500, "Failed to revoke tokens")
 
-# Helper function to get client IP
-def get_client_ip(request: Request) -> str:
-    """Extract client IP from request, handling proxy headers"""
-    # Check for forwarded IP headers (common in proxy setups)
-    forwarded_ip = request.headers.get("x-forwarded-for")
-    if forwarded_ip:
-        # Take the first IP in case of multiple proxies
-        return forwarded_ip.split(",")[0].strip()
-    
-    real_ip = request.headers.get("x-real-ip")
-    if real_ip:
-        return real_ip.strip()
-    
-    # Fall back to direct client IP
-    return request.client.host if request.client else "unknown"
+# Note: get_client_ip function defined above
 
 # Token validation middleware
 async def require_valid_token(request: Request) -> dict:
@@ -538,81 +524,157 @@ async def require_valid_token(request: Request) -> dict:
 
 @app.post("/api/telemetry")
 async def submit_telemetry(request: Request):
-    """Enhanced telemetry endpoint for ISP servers with local storage and optional webhooks"""
+    """Dual telemetry endpoint: local ISP storage + central ASN statistics"""
     try:
-        # Get request data (same format as existing system)
+        # Get request data and client info
         data = await request.json()
-        client_ip = request.client.host
-        user_agent = request.headers.get('user-agent', '')
         
-        # Import the enhanced telemetry system
-        from enhanced_telemetry import record_isp_test_result
+        # Check if this is forwarded from central server
+        if data.get('forwarded_from') == 'central_server':
+            # Use the forwarded client IP and ASN info
+            client_ip = data.get('client_ip', get_client_ip(request))
+            user_agent = request.headers.get('user-agent', '')
+            asn_info = data.get('asn_info', {})
+            logger.info(f"📊 Telemetry forwarded from central server for {client_ip[:8]}... (ASN: {asn_info.get('asn', 'UNKNOWN')})")
+        else:
+            # Direct submission from client
+            client_ip = get_client_ip(request)
+            user_agent = request.headers.get('user-agent', '')
+            asn_info = None
+            logger.info(f"📊 Direct telemetry submission from {client_ip[:8]}...")
         
-        # Record locally with full IP (for ISP support)
-        test_id = await record_isp_test_result(
-            data.get('results', {}),
-            client_ip,
-            user_agent
-        )
-        
-        # ALSO forward to central server (without IP) if this is an ISP server
-        # This maintains the existing central telemetry while adding local storage
-        if IS_CENTRAL_SERVER and TELEMETRY_AVAILABLE:
-            # If we're on central server, also use the original telemetry
+        # Step 1: Store locally with full IP (for ISP support)
+        local_test_id = None
+        if not IS_CENTRAL_SERVER:
             try:
-                await telemetry_manager.record_test_result(
-                    data.get('results', {}),
+                # Import enhanced telemetry for ISP servers
+                try:
+                    from .enhanced_telemetry import record_isp_test_result
+                except ImportError:
+                    from enhanced_telemetry import record_isp_test_result
+                
+                # Include ASN info if available (from central server forwarding)
+                results_data = data.get('results', {})
+                if asn_info:
+                    results_data['asn_info'] = asn_info
+                
+                local_test_id = await record_isp_test_result(
+                    results_data,
                     client_ip,
-                    True  # telemetry_enabled
+                    user_agent
                 )
+                logger.info(f"📊 Stored locally with IP for ISP support (ID: {local_test_id})")
             except Exception as e:
-                logger.warning(f"Central telemetry failed: {e}")
-        elif not IS_CENTRAL_SERVER:
-            # Forward anonymized data to central server for global stats
+                logger.warning(f"Local ISP telemetry storage failed: {e}")
+        
+        # Step 2: Central server processing (with ASN lookup)
+        central_test_id = None
+        if IS_CENTRAL_SERVER and TELEMETRY_AVAILABLE:
+            # On central server - check if this is from ISP server or direct client
             try:
+                source_server = data.get('source_server', 'direct')
+                pre_resolved_asn = data.get('asn')
+                
+                # Handle ISP server forwarding vs direct client submission
+                if source_server == 'isp' and pre_resolved_asn:
+                    # ISP server forwarded this with pre-resolved ASN
+                    central_test_id = await telemetry_manager.record_test_result(
+                        data.get('results', {}),
+                        data.get('client_ip', client_ip),  # Use forwarded IP if available
+                        True,  # telemetry_enabled
+                        pre_resolved_asn,
+                        source_server
+                    )
+                    logger.info(f"📊 Stored ISP-forwarded data with ASN {pre_resolved_asn} (ID: {central_test_id})")
+                else:
+                    # Direct client submission
+                    central_test_id = await telemetry_manager.record_test_result(
+                        data.get('results', {}),
+                        client_ip,
+                        True,  # telemetry_enabled
+                        None,  # No pre-resolved ASN
+                        'direct'
+                    )
+                    logger.info(f"📊 Stored direct client data with ASN lookup (ID: {central_test_id})")
+                    
+            except Exception as e:
+                logger.error(f"Central telemetry storage failed: {e}")
+        
+        elif not IS_CENTRAL_SERVER:
+            # On ISP server - forward to central with ASN lookup
+            try:
+                # Get ASN for this IP first
+                asn_info = None
+                if TELEMETRY_AVAILABLE:
+                    asn_info = await telemetry_manager.get_asn(client_ip)
+                
+                # Forward to central server with IP + ASN + data
                 import aiohttp
-                central_data = data.copy()
-                # Data is already anonymized by client, just forward it
+                central_payload = {
+                    "telemetry_enabled": data.get("telemetry_enabled", True),
+                    "results": data.get("results", {}),
+                    "client_ip": client_ip,  # Send IP to central for ASN verification
+                    "asn": asn_info,  # Pre-resolved ASN
+                    "user_agent": user_agent,
+                    "source_server": "isp"
+                }
                 
                 async with aiohttp.ClientSession() as session:
-                    await session.post(
+                    response = await session.post(
                         'https://test.libreqos.com/api/telemetry',
-                        json=central_data,
-                        timeout=aiohttp.ClientTimeout(total=5)
+                        json=central_payload,
+                        timeout=aiohttp.ClientTimeout(total=10)
                     )
-                logger.debug("Forwarded anonymized telemetry to central server")
+                    
+                    if response.status == 200:
+                        response_data = await response.json()
+                        central_test_id = response_data.get("test_id")
+                        logger.info(f"📊 Forwarded to central server (ID: {central_test_id})")
+                    else:
+                        logger.warning(f"Central server forward failed: HTTP {response.status}")
+                        
             except Exception as e:
-                logger.debug(f"Central telemetry forward failed (non-critical): {e}")
+                logger.warning(f"Central telemetry forward failed (non-critical): {e}")
         
+        # Return success with appropriate test ID
         return JSONResponse({
             "success": True,
-            "test_id": test_id,
-            "message": "Test results recorded successfully"
+            "test_id": central_test_id or local_test_id or f"fallback_{int(time.time())}",
+            "local_id": local_test_id,
+            "central_id": central_test_id,
+            "message": "Test results processed successfully"
         })
         
     except Exception as e:
-        logger.error(f"Error in enhanced telemetry: {e}")
+        logger.error(f"Error in telemetry processing: {e}")
         return JSONResponse({"error": str(e)}, status_code=500)
 
 # Helper function for API key authentication
 def verify_telemetry_auth(request: Request) -> bool:
     """Verify API key for telemetry endpoints"""
-    from enhanced_telemetry import isp_telemetry
-    
-    # Check Authorization header first
-    auth_header = request.headers.get("Authorization", "")
-    if auth_header.startswith("Bearer "):
-        api_key = auth_header[7:]  # Remove "Bearer " prefix
+    try:
+        try:
+            from .enhanced_telemetry import isp_telemetry
+        except ImportError:
+            from enhanced_telemetry import isp_telemetry
+        
+        # Check Authorization header first
+        auth_header = request.headers.get("Authorization", "")
+        if auth_header.startswith("Bearer "):
+            api_key = auth_header[7:]  # Remove "Bearer " prefix
+            return isp_telemetry.verify_api_key(api_key)
+        
+        # Check X-API-Key header
+        api_key = request.headers.get("X-API-Key")
+        if api_key:
+            return isp_telemetry.verify_api_key(api_key)
+        
+        # Check query parameter (less secure, but convenient)
+        api_key = request.query_params.get("api_key")
         return isp_telemetry.verify_api_key(api_key)
-    
-    # Check X-API-Key header
-    api_key = request.headers.get("X-API-Key")
-    if api_key:
-        return isp_telemetry.verify_api_key(api_key)
-    
-    # Check query parameter (less secure, but convenient)
-    api_key = request.query_params.get("api_key")
-    return isp_telemetry.verify_api_key(api_key)
+    except ImportError:
+        # Enhanced telemetry not available, disable auth requirement
+        return True
 
 # ISP Support Team Endpoints for Local Telemetry (Protected)
 @app.get("/api/telemetry/recent")
@@ -626,7 +688,10 @@ async def get_recent_tests(request: Request, limit: int = 50):
         )
     
     try:
-        from enhanced_telemetry import isp_telemetry
+        try:
+            from .enhanced_telemetry import isp_telemetry
+        except ImportError:
+            from enhanced_telemetry import isp_telemetry
         
         results = isp_telemetry.get_recent_tests(client_ip=None, limit=limit)
         return JSONResponse({
@@ -635,6 +700,8 @@ async def get_recent_tests(request: Request, limit: int = 50):
             "total": len(results),
             "limit": limit
         })
+    except ImportError:
+        return JSONResponse({"error": "Enhanced telemetry not available"}, status_code=503)
     except Exception as e:
         logger.error(f"Error getting recent tests: {e}")
         return JSONResponse({"error": str(e)}, status_code=500)
@@ -650,7 +717,10 @@ async def get_customer_tests(request: Request, client_ip: str, limit: int = 20):
         )
     
     try:
-        from enhanced_telemetry import isp_telemetry
+        try:
+            from .enhanced_telemetry import isp_telemetry
+        except ImportError:
+            from enhanced_telemetry import isp_telemetry
         
         tests = isp_telemetry.get_recent_tests(client_ip=client_ip, limit=limit)
         return JSONResponse({
@@ -659,6 +729,8 @@ async def get_customer_tests(request: Request, client_ip: str, limit: int = 20):
             "tests": tests,
             "total_tests": len(tests)
         })
+    except ImportError:
+        return JSONResponse({"error": "Enhanced telemetry not available"}, status_code=503)
     except Exception as e:
         logger.error(f"Error getting customer tests: {e}")
         return JSONResponse({"error": str(e)}, status_code=500)
@@ -674,10 +746,15 @@ async def get_isp_telemetry_stats(request: Request):
         )
     
     try:
-        from enhanced_telemetry import isp_telemetry
+        try:
+            from .enhanced_telemetry import isp_telemetry
+        except ImportError:
+            from enhanced_telemetry import isp_telemetry
         
         stats = isp_telemetry.get_stats()
         return JSONResponse(stats)
+    except ImportError:
+        return JSONResponse({"error": "Enhanced telemetry not available"}, status_code=503)
     except Exception as e:
         logger.error(f"Error getting telemetry stats: {e}")
         return JSONResponse({"error": str(e)}, status_code=500)
@@ -885,6 +962,25 @@ async def rate_limit_status(request: Request):
             "websocket_sessions": rate_limiter.websocket_sessions
         }
     }
+
+# Rankings page route
+@app.get("/rankings")
+async def get_rankings_page():
+    """Serve the ISP rankings page"""
+    try:
+        client_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "client")
+        rankings_file = os.path.join(client_dir, "rankings.html")
+        
+        with open(rankings_file, 'r', encoding='utf-8') as f:
+            content = f.read()
+        
+        return Response(content=content, media_type="text/html")
+        
+    except FileNotFoundError:
+        raise HTTPException(status_code=404, detail="Rankings page not found")
+    except Exception as e:
+        logger.error(f"Error serving rankings page: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 # Startup and shutdown events
 @app.on_event("startup")

@@ -31,19 +31,24 @@ class TelemetryManager {
             return;
         }
 
-        // Only submit telemetry if we're NOT already on the central server
+        // Always submit to local server - it will handle dual telemetry
+        const submitUrl = '/api/telemetry';
+        
         if (window.location.hostname === 'test.libreqos.com') {
-            console.log('📊 On central server, telemetry handled server-side');
-            return;
+            console.log('📊 On central server, submitting to local telemetry endpoint');
+        } else {
+            console.log('📊 On ISP server, submitting to local endpoint (will forward to central)');
         }
 
         try {
             const telemetryData = this._prepareTelemetryData(results);
-            await this._submitWithRetry(telemetryData);
-            console.log('📊 Telemetry submitted successfully to central server');
+            const result = await this._submitWithRetry(telemetryData, submitUrl);
+            console.log('📊 Telemetry submitted successfully');
+            return result;
         } catch (error) {
             console.warn('📊 Telemetry submission failed:', error.message);
             // Don't throw error - telemetry failures shouldn't break the test
+            return { success: false, error: error.message };
         }
     }
 
@@ -63,6 +68,16 @@ class TelemetryManager {
             }
         };
 
+        // Include server information from discovery
+        if (window.serverDiscovery && window.serverDiscovery.getCurrentServer()) {
+            const server = window.serverDiscovery.getCurrentServer();
+            telemetryData.server_info = {
+                server_id: server.id,
+                server_url: server.url,
+                server_name: server.name
+            };
+        }
+
         // Extract grades
         if (results.grades) {
             telemetryData.results.grades = {
@@ -73,17 +88,15 @@ class TelemetryManager {
             };
         }
 
-        // Extract metrics
-        if (results.metrics) {
-            telemetryData.results.metrics = {
-                baseline_latency_ms: results.metrics.baselineLatency,
-                download_latency_increase_ms: results.metrics.downloadLatencyIncrease,
-                upload_latency_increase_ms: results.metrics.uploadLatencyIncrease,
-                bidirectional_latency_increase_ms: results.metrics.bidirectionalLatencyIncrease,
-                download_throughput_mbps: results.metrics.downloadThroughput,
-                upload_throughput_mbps: results.metrics.uploadThroughput
-            };
-        }
+        // Extract metrics directly from results (not from results.metrics)
+        telemetryData.results.metrics = {
+            baseline_latency_ms: results.baselineLatency || 0,
+            download_latency_increase_ms: results.downloadLatencyIncrease || 0,
+            upload_latency_increase_ms: results.uploadLatencyIncrease || 0,
+            bidirectional_latency_increase_ms: results.bidirectionalLatencyIncrease || 0,
+            download_throughput_mbps: results.downloadThroughput || 0,
+            upload_throughput_mbps: results.uploadThroughput || 0
+        };
 
         // Virtual Household specific data
         if (results.testType === 'virtual_household' && results.householdResults) {
@@ -101,13 +114,14 @@ class TelemetryManager {
     /**
      * Submit telemetry data with retry logic
      * @param {Object} data - Telemetry data to submit
+     * @param {string} url - URL to submit to
      */
-    async _submitWithRetry(data) {
+    async _submitWithRetry(data, url) {
         let lastError;
         
         for (let attempt = 1; attempt <= this.maxRetries; attempt++) {
             try {
-                const response = await fetch(this.submitUrl, {
+                const response = await fetch(url, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
@@ -116,7 +130,7 @@ class TelemetryManager {
                 });
 
                 if (response.ok) {
-                    return; // Success
+                    return { success: true, status: response.status }; // Success
                 }
 
                 // Non-2xx response
