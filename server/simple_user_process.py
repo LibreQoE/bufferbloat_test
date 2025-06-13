@@ -35,8 +35,7 @@ from websocket_virtual_household import (
 )
 
 # Import rate limiter for DDOS protection
-from simple_rate_limiter import SimpleRateLimiter
-rate_limiter = SimpleRateLimiter()
+from rate_limiter import rate_limiter
 
 logger = logging.getLogger(__name__)
 
