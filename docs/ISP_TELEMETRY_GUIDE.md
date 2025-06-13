@@ -4,6 +4,13 @@
 
 The LibreQoS bufferbloat test now includes enhanced telemetry specifically designed for ISP support teams. This system provides customer correlation capabilities for support troubleshooting, while adding unique bufferbloat insights.
 
+### Dual Telemetry System
+
+When users test through test.libreqos.com and select an ISP server:
+- **Central Server**: Receives anonymized telemetry (ASN data only, no IP addresses)
+- **ISP Server**: Receives complete telemetry with IP addresses for customer support
+- **Automatic Forwarding**: Central server forwards complete data to the ISP that served the test
+
 ## Key Features
 
 - **Local Storage**: 1000 most recent tests stored with full IP addresses
@@ -11,6 +18,8 @@ The LibreQoS bufferbloat test now includes enhanced telemetry specifically desig
 - **Optional Webhooks**: Integrate with existing ISP portals/systems
 - **Privacy Preserving**: Central server never stores customer IPs
 - **Zero Configuration**: Works out of the box with sensible defaults
+- **Dual Telemetry**: Automatic forwarding from central server to serving ISP
+- **Unified Latency Grading**: Consistent grading across baseline and bufferbloat metrics
 
 ## What Data is Collected
 
@@ -24,6 +33,10 @@ The LibreQoS bufferbloat test now includes enhanced telemetry specifically desig
   - Additional latency during bidirectional traffic (ms)
   - Overall bufferbloat grade (A+ to F)
   - Individual grades for download/upload/bidirectional
+  - **New unified grading system**:
+    - Baseline latency grade (A+ <75ms, A <100ms, B <125ms, C <150ms, D <175ms, F ≥175ms)
+    - Latency increase grades (A+ <5ms, A <30ms, B <60ms, C <200ms, D <400ms, F ≥400ms)
+    - ASN Grade = min(baseline_grade, average(download_increase, upload_increase, bidirectional_increase))
 
 ### Virtual Household Tests  
 - Client IP address and User-Agent
@@ -120,7 +133,13 @@ When webhooks are configured, test results are sent in a standard format compati
     "download_latency_increase_ms": 45.2,
     "upload_latency_increase_ms": 78.9,
     "bidirectional_latency_increase_ms": 67.1
-  }
+  },
+  "asn_info": {
+    "asn": "AS12345",
+    "asn_name": "Example ISP LLC",
+    "country_code": "US"
+  },
+  "forwarded_from": "central_server"  // Only present if forwarded
 }
 ```
 
@@ -183,7 +202,11 @@ CREATE TABLE test_results (
     sarah_grade TEXT,
     jake_grade TEXT,
     computer_grade TEXT,
-    test_server_name TEXT
+    test_server_name TEXT,
+    forwarded_from TEXT,  -- 'central_server' if forwarded
+    asn TEXT,             -- AS number (e.g., 'AS12345')
+    asn_name TEXT,        -- Organization name
+    country_code TEXT     -- Two-letter country code
 );
 ```
 
@@ -232,6 +255,8 @@ Monitor server logs for:
 1. Check server logs for telemetry errors
 2. Verify `/opt/libreqos_data/` directory is writable
 3. Test API endpoints: `curl -H "Authorization: Bearer your-api-key" http://localhost:8000/api/telemetry/stats`
+4. For tests from test.libreqos.com: Check logs for "Telemetry forwarded to ISP server" messages
+5. Ensure your server is properly configured in lqos_test_servers.json on the central server
 
 ### Webhook not working
 1. Check `/etc/lqos_test.conf` syntax
@@ -262,6 +287,9 @@ Analyze bufferbloat patterns across your network using the stored data.
 - **Retention**: Automatically limited to 1000 most recent tests
 - **Access Control**: Optional API key authentication for telemetry endpoints
 - **Authentication**: Configure `telemetry_api_key` in `/etc/lqos_test.conf` to protect API access
+- **Dual Telemetry Flow**: 
+  - When users test via test.libreqos.com: Central server → ASN lookup → Forward to ISP (with IP) → Store anonymized (without IP)
+  - When users test directly on ISP server: Normal local telemetry only
 
 ## Key Advantages
 
@@ -276,5 +304,8 @@ Analyze bufferbloat patterns across your network using the stored data.
 - **Bufferbloat Analysis**: Detailed latency impact measurements during throughput tests
 - **Virtual Household Testing**: Realistic multi-user scenario testing with individual performance grades
 - **Real-time Quality Assessment**: Per-application performance grades (Gaming, Video Calls, Streaming, Background Traffic)
+- **Dual Telemetry System**: Automatic forwarding from central server ensures ISPs receive data for tests they serve
+- **Unified Latency Grading**: Consistent methodology separating baseline latency quality from bufferbloat performance
+- **ISP Rankings**: Public rankings based on latency metrics to encourage network improvements
 
 The LibreQoS system provides comprehensive customer correlation capabilities plus unique network quality insights focused on real-world user experience.

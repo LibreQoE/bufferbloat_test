@@ -631,6 +631,11 @@ function initializeExplanationToggle(containerId) {
             newToggleButton.classList.add('expanded');
             if (toggleIcon) toggleIcon.textContent = '▲';
             console.log(`✅ Showing explanation content for container: ${containerId}`);
+            
+            // Populate threshold tables if this is Single User mode
+            if (containerId === 'singleUserResults') {
+                populateThresholdTables();
+            }
         } else {
             // Hide the explanation content
             currentExplanationContent.classList.add('hidden');
@@ -641,6 +646,116 @@ function initializeExplanationToggle(containerId) {
     });
     
     console.log(`✅ Explanation toggle initialized successfully for container: ${containerId}`);
+}
+
+/**
+ * Populate the threshold tables dynamically from the configuration
+ */
+async function populateThresholdTables() {
+    try {
+        // Load the threshold configuration
+        const response = await fetch('/latencyGradeThresholds.json');
+        if (!response.ok) {
+            throw new Error(`Failed to load threshold configuration: ${response.status}`);
+        }
+        
+        const config = await response.json();
+        console.log('📊 Loaded threshold configuration:', config);
+        
+        // Populate baseline table
+        const baselineTableBody = document.getElementById('baselineGradeTableBody');
+        if (baselineTableBody && config.baseline && config.baseline.thresholds) {
+            baselineTableBody.innerHTML = '';
+            
+            config.baseline.thresholds.forEach((threshold, index) => {
+                const row = document.createElement('tr');
+                row.className = `grade-row ${threshold.class || threshold.grade.toLowerCase().replace('+', '-plus')}`;
+                
+                // Format the latency range
+                let latencyRange;
+                if (index === 0) {
+                    latencyRange = `< ${threshold.threshold} ms`;
+                } else if (index === config.baseline.thresholds.length - 1) {
+                    latencyRange = `≥ ${config.baseline.thresholds[index - 1].threshold} ms`;
+                } else {
+                    const prevThreshold = config.baseline.thresholds[index - 1].threshold;
+                    latencyRange = `${prevThreshold}-${threshold.threshold} ms`;
+                }
+                
+                row.innerHTML = `
+                    <td>${latencyRange}</td>
+                    <td><span class="grade-badge-small ${threshold.class || threshold.grade.toLowerCase().replace('+', '-plus')}">${threshold.grade}</span></td>
+                    <td>${threshold.description} connection quality</td>
+                `;
+                
+                baselineTableBody.appendChild(row);
+            });
+        }
+        
+        // Populate increase table
+        const increaseTableBody = document.getElementById('increaseGradeTableBody');
+        if (increaseTableBody && config.increase && config.increase.thresholds) {
+            increaseTableBody.innerHTML = '';
+            
+            config.increase.thresholds.forEach((threshold, index) => {
+                const row = document.createElement('tr');
+                row.className = `grade-row ${threshold.class || threshold.grade.toLowerCase().replace('+', '-plus')}`;
+                
+                // Format the latency range
+                let latencyRange;
+                if (index === 0) {
+                    latencyRange = `< ${threshold.threshold} ms`;
+                } else if (index === config.increase.thresholds.length - 1) {
+                    latencyRange = `≥ ${config.increase.thresholds[index - 1].threshold} ms`;
+                } else {
+                    const prevThreshold = config.increase.thresholds[index - 1].threshold;
+                    latencyRange = `${prevThreshold}-${threshold.threshold} ms`;
+                }
+                
+                // Add bufferbloat context to description
+                let description = threshold.description;
+                if (threshold.grade === 'A+') {
+                    description += ' - Virtually no bufferbloat';
+                } else if (threshold.grade === 'A') {
+                    description += ' - Minimal bufferbloat';
+                } else if (threshold.grade === 'B') {
+                    description += ' - Moderate bufferbloat';
+                } else if (threshold.grade === 'C') {
+                    description += ' - Noticeable bufferbloat';
+                } else if (threshold.grade === 'D') {
+                    description += ' - Significant bufferbloat';
+                } else if (threshold.grade === 'F') {
+                    description += ' - Severe bufferbloat';
+                }
+                
+                row.innerHTML = `
+                    <td>${latencyRange}</td>
+                    <td><span class="grade-badge-small ${threshold.class || threshold.grade.toLowerCase().replace('+', '-plus')}">${threshold.grade}</span></td>
+                    <td>${description}</td>
+                `;
+                
+                increaseTableBody.appendChild(row);
+            });
+        }
+        
+        console.log('✅ Threshold tables populated successfully');
+        
+    } catch (error) {
+        console.error('❌ Failed to populate threshold tables:', error);
+        
+        // Show error message in tables
+        const errorMessage = '<tr><td colspan="3" style="text-align: center; color: #ff6b6b;">Failed to load threshold configuration</td></tr>';
+        
+        const baselineTableBody = document.getElementById('baselineGradeTableBody');
+        if (baselineTableBody) {
+            baselineTableBody.innerHTML = errorMessage;
+        }
+        
+        const increaseTableBody = document.getElementById('increaseGradeTableBody');
+        if (increaseTableBody) {
+            increaseTableBody.innerHTML = errorMessage;
+        }
+    }
 }
 
 /**

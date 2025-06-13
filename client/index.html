@@ -163,37 +163,8 @@
                                                     <th>Description</th>
                                                 </tr>
                                             </thead>
-                                            <tbody>
-                                                <tr class="grade-row a-plus">
-                                                    <td>&lt; 75 ms</td>
-                                                    <td><span class="grade-badge-small a-plus">A+</span></td>
-                                                    <td>Excellent connection quality</td>
-                                                </tr>
-                                                <tr class="grade-row a">
-                                                    <td>75-100 ms</td>
-                                                    <td><span class="grade-badge-small a">A</span></td>
-                                                    <td>Very good connection quality</td>
-                                                </tr>
-                                                <tr class="grade-row b">
-                                                    <td>100-125 ms</td>
-                                                    <td><span class="grade-badge-small b">B</span></td>
-                                                    <td>Good connection quality</td>
-                                                </tr>
-                                                <tr class="grade-row c">
-                                                    <td>125-150 ms</td>
-                                                    <td><span class="grade-badge-small c">C</span></td>
-                                                    <td>Fair connection quality</td>
-                                                </tr>
-                                                <tr class="grade-row d">
-                                                    <td>150-175 ms</td>
-                                                    <td><span class="grade-badge-small d">D</span></td>
-                                                    <td>Poor connection quality</td>
-                                                </tr>
-                                                <tr class="grade-row f">
-                                                    <td>≥ 175 ms</td>
-                                                    <td><span class="grade-badge-small f">F</span></td>
-                                                    <td>Very poor connection quality</td>
-                                                </tr>
+                                            <tbody id="baselineGradeTableBody">
+                                                <!-- Populated dynamically from latencyGradeThresholds.json -->
                                             </tbody>
                                         </table>
                                     </div>
@@ -208,37 +179,8 @@
                                                     <th>Description</th>
                                                 </tr>
                                             </thead>
-                                            <tbody>
-                                                <tr class="grade-row a-plus">
-                                                    <td>&lt; 5 ms</td>
-                                                    <td><span class="grade-badge-small a-plus">A+</span></td>
-                                                    <td>Excellent - Virtually no bufferbloat</td>
-                                                </tr>
-                                                <tr class="grade-row a">
-                                                    <td>5-30 ms</td>
-                                                    <td><span class="grade-badge-small a">A</span></td>
-                                                    <td>Very Good - Minimal bufferbloat</td>
-                                                </tr>
-                                                <tr class="grade-row b">
-                                                    <td>30-60 ms</td>
-                                                    <td><span class="grade-badge-small b">B</span></td>
-                                                    <td>Good - Moderate bufferbloat</td>
-                                                </tr>
-                                                <tr class="grade-row c">
-                                                    <td>60-200 ms</td>
-                                                    <td><span class="grade-badge-small c">C</span></td>
-                                                    <td>Fair - Noticeable bufferbloat</td>
-                                                </tr>
-                                                <tr class="grade-row d">
-                                                    <td>200-400 ms</td>
-                                                    <td><span class="grade-badge-small d">D</span></td>
-                                                    <td>Poor - Significant bufferbloat</td>
-                                                </tr>
-                                                <tr class="grade-row f">
-                                                    <td>≥ 400 ms</td>
-                                                    <td><span class="grade-badge-small f">F</span></td>
-                                                    <td>Very Poor - Severe bufferbloat</td>
-                                                </tr>
+                                            <tbody id="increaseGradeTableBody">
+                                                <!-- Populated dynamically from latencyGradeThresholds.json -->
                                             </tbody>
                                         </table>
                                     </div>
@@ -266,42 +208,42 @@
                             <div class="grade-explanation a-plus">
                                 <div class="grade-badge">A+</div>
                                 <div class="grade-description">
-                                    <h4>Excellent (&lt; 5ms increase)</h4>
+                                    <h4>Excellent</h4>
                                     <p>Your connection has virtually no bufferbloat! Perfect for video calls, online gaming, and real-time applications. Your connection maintains low latency even under heavy load.</p>
                                 </div>
                             </div>
                             <div class="grade-explanation a">
                                 <div class="grade-badge">A</div>
                                 <div class="grade-description">
-                                    <h4>Very Good (5-30ms increase)</h4>
+                                    <h4>Very Good</h4>
                                     <p>Minimal bufferbloat with excellent performance. Great for video calls, streaming, and gaming. You may notice slight delays only during very heavy usage.</p>
                                 </div>
                             </div>
                             <div class="grade-explanation b">
                                 <div class="grade-badge">B</div>
                                 <div class="grade-description">
-                                    <h4>Good (30-60ms increase)</h4>
+                                    <h4>Good</h4>
                                     <p>Moderate bufferbloat that's generally acceptable. Good for most activities, though you might notice some lag during video calls or gaming when downloading large files.</p>
                                 </div>
                             </div>
                             <div class="grade-explanation c">
                                 <div class="grade-badge">C</div>
                                 <div class="grade-description">
-                                    <h4>Fair (60-200ms increase)</h4>
+                                    <h4>Fair</h4>
                                     <p>Noticeable bufferbloat that affects performance. You'll likely experience lag during video calls, choppy streaming, and delayed responses in online games when your connection is busy.</p>
                                 </div>
                             </div>
                             <div class="grade-explanation d">
                                 <div class="grade-badge">D</div>
                                 <div class="grade-description">
-                                    <h4>Poor (200-400ms increase)</h4>
+                                    <h4>Poor</h4>
                                     <p>Significant bufferbloat causing major performance issues. Video calls will be problematic, streaming may buffer frequently, and online gaming will be frustrating during heavy usage.</p>
                                 </div>
                             </div>
                             <div class="grade-explanation f">
                                 <div class="grade-badge">F</div>
                                 <div class="grade-description">
-                                    <h4>Very Poor (400ms+ increase)</h4>
+                                    <h4>Very Poor</h4>
                                     <p>Severe bufferbloat making real-time applications nearly unusable. Video calls will drop frequently, streaming will buffer constantly, and online gaming will be extremely laggy when downloading or uploading.</p>
                                 </div>
                             </div>
@@ -1100,6 +1042,39 @@
         
         .grade-row.f {
             background: rgba(220, 53, 69, 0.08);
+        }
+        
+        /* Grade calculation tables layout */
+        .grade-calculation-tables {
+            display: flex;
+            gap: 20px;
+            margin: 20px 0;
+            flex-wrap: wrap;
+        }
+        
+        .baseline-table,
+        .increase-table {
+            flex: 1;
+            min-width: 300px;
+        }
+        
+        .baseline-table h5,
+        .increase-table h5 {
+            color: #ffffff;
+            margin: 0 0 10px 0;
+            font-size: 16px;
+            font-weight: 600;
+        }
+        
+        @media (max-width: 768px) {
+            .grade-calculation-tables {
+                flex-direction: column;
+            }
+            
+            .baseline-table,
+            .increase-table {
+                min-width: auto;
+            }
         }
     </style>
     
