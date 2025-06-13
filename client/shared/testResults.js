@@ -633,7 +633,7 @@ function initializeExplanationToggle(containerId) {
             console.log(`✅ Showing explanation content for container: ${containerId}`);
             
             // Populate threshold tables if this is Single User mode
-            if (containerId === 'singleUserResults') {
+            if (containerId === 'results' || containerId === 'singleUserResults') {
                 populateThresholdTables();
             }
         } else {
@@ -664,8 +664,12 @@ async function populateThresholdTables() {
         
         // Populate baseline table
         const baselineTableBody = document.getElementById('baselineGradeTableBody');
+        console.log('📊 Baseline table body element:', baselineTableBody);
+        console.log('📊 Config baseline thresholds:', config.baseline);
+        
         if (baselineTableBody && config.baseline && config.baseline.thresholds) {
             baselineTableBody.innerHTML = '';
+            console.log('📊 Populating baseline table with', config.baseline.thresholds.length, 'rows');
             
             config.baseline.thresholds.forEach((threshold, index) => {
                 const row = document.createElement('tr');
@@ -679,7 +683,7 @@ async function populateThresholdTables() {
                     latencyRange = `≥ ${config.baseline.thresholds[index - 1].threshold} ms`;
                 } else {
                     const prevThreshold = config.baseline.thresholds[index - 1].threshold;
-                    latencyRange = `${prevThreshold}-${threshold.threshold} ms`;
+                    latencyRange = `${prevThreshold} - ${threshold.threshold - 1} ms`;
                 }
                 
                 row.innerHTML = `
@@ -690,12 +694,22 @@ async function populateThresholdTables() {
                 
                 baselineTableBody.appendChild(row);
             });
+        } else {
+            console.warn('❌ Could not populate baseline table:', {
+                tableBodyFound: !!baselineTableBody,
+                configBaseline: !!config.baseline,
+                thresholds: config.baseline?.thresholds?.length || 0
+            });
         }
         
         // Populate increase table
         const increaseTableBody = document.getElementById('increaseGradeTableBody');
+        console.log('📊 Increase table body element:', increaseTableBody);
+        console.log('📊 Config increase thresholds:', config.increase);
+        
         if (increaseTableBody && config.increase && config.increase.thresholds) {
             increaseTableBody.innerHTML = '';
+            console.log('📊 Populating increase table with', config.increase.thresholds.length, 'rows');
             
             config.increase.thresholds.forEach((threshold, index) => {
                 const row = document.createElement('tr');
@@ -709,7 +723,7 @@ async function populateThresholdTables() {
                     latencyRange = `≥ ${config.increase.thresholds[index - 1].threshold} ms`;
                 } else {
                     const prevThreshold = config.increase.thresholds[index - 1].threshold;
-                    latencyRange = `${prevThreshold}-${threshold.threshold} ms`;
+                    latencyRange = `${prevThreshold} - ${threshold.threshold - 1} ms`;
                 }
                 
                 // Add bufferbloat context to description
@@ -735,6 +749,12 @@ async function populateThresholdTables() {
                 `;
                 
                 increaseTableBody.appendChild(row);
+            });
+        } else {
+            console.warn('❌ Could not populate increase table:', {
+                tableBodyFound: !!increaseTableBody,
+                configIncrease: !!config.increase,
+                thresholds: config.increase?.thresholds?.length || 0
             });
         }
         
