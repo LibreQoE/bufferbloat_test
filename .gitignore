@@ -10,9 +10,6 @@ install_central_service.sh
 server/token_auth.py
 server/server_registry.json
 
-# Telemetry system (should not be public)
-server/telemetry.py
-
 # Telemetry database and configs
 /var/lib/libreqos_test/
 *.db
