@@ -15,11 +15,46 @@
         }
 
         .filters-container {
-            background-color: var(--secondary);
-            border-radius: 8px;
-            padding: 20px;
-            margin-bottom: 30px;
+            background: rgba(255, 255, 255, 0.03);
+            border-radius: 12px;
+            padding: 16px;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            flex-wrap: wrap;
+        }
+
+        .search-container {
+            flex: 1;
+            min-width: 200px;
+            position: relative;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 10px 16px 10px 40px;
+            background: rgba(255, 255, 255, 0.05);
             border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
+            color: var(--text);
+            font-size: 14px;
+            transition: all 0.2s ease;
+        }
+
+        .search-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .search-icon {
+            position: absolute;
+            left: 12px;
+            top: 50%;
+            transform: translateY(-50%);
+            opacity: 0.5;
+            font-size: 16px;
         }
 
         .filter-group {
@@ -41,27 +76,39 @@
         }
 
 
-        .country-filter {
-            padding: 8px 12px;
-            border-radius: 4px;
-            border: 1px solid rgba(255, 255, 255, 0.2);
-            background-color: var(--background);
+        .filter-select {
+            padding: 10px 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 8px;
             color: var(--text);
             font-size: 14px;
-            min-width: 120px;
+            min-width: 140px;
+            cursor: pointer;
+            transition: all 0.2s ease;
         }
 
-        .country-filter option {
+        .filter-select:hover {
+            border-color: rgba(255, 255, 255, 0.2);
+            background: rgba(255, 255, 255, 0.08);
+        }
+
+        .filter-select:focus {
+            outline: none;
+            border-color: var(--primary);
+        }
+
+        .filter-select option {
             background-color: var(--background);
             color: var(--text);
+            padding: 8px;
         }
 
         .rankings-table-container {
-            background-color: var(--secondary);
-            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.02);
+            border-radius: 12px;
             overflow: hidden;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
         }
 
         .rankings-table {
@@ -71,14 +118,19 @@
         }
 
         .rankings-table th {
-            background-color: var(--primary);
+            background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
             color: white;
-            padding: 15px 12px;
+            padding: 16px 12px;
             text-align: left;
             font-weight: 600;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
             cursor: pointer;
             user-select: none;
-            position: relative;
+            position: sticky;
+            top: 0;
+            z-index: 10;
             transition: background-color 0.2s ease;
         }
 
@@ -104,33 +156,61 @@
         }
 
         .rankings-table td {
-            padding: 12px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 14px 12px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
             vertical-align: middle;
+            transition: background-color 0.2s ease;
         }
 
-        .rankings-table tr:nth-child(even) {
-            background-color: rgba(255, 255, 255, 0.05);
+        .rankings-table tbody tr {
+            transition: all 0.2s ease;
         }
 
-        .rankings-table tr:hover {
-            background-color: rgba(255, 255, 255, 0.1);
+        .rankings-table tbody tr:nth-child(even) {
+            background-color: rgba(255, 255, 255, 0.02);
+        }
+
+        .rankings-table tbody tr:hover {
+            background-color: rgba(255, 255, 255, 0.08);
+            transform: translateX(2px);
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
         }
 
         .rank-cell {
-            font-weight: 600;
-            color: var(--accent);
+            font-weight: 700;
             text-align: center;
-            width: 60px;
+            width: 70px;
         }
 
-        .rank-cell.top-3 {
-            font-size: 16px;
+        .rank-number {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            font-size: 14px;
         }
 
-        .rank-cell .rank-1 { color: #ffd700; } /* Gold */
-        .rank-cell .rank-2 { color: #c0c0c0; } /* Silver */
-        .rank-cell .rank-3 { color: #cd7f32; } /* Bronze */
+        .rank-1 .rank-number {
+            background: linear-gradient(135deg, #FFD700, #FFA500);
+            color: #000;
+        }
+
+        .rank-2 .rank-number {
+            background: linear-gradient(135deg, #E5E5E5, #A8A8A8);
+            color: #000;
+        }
+
+        .rank-3 .rank-number {
+            background: linear-gradient(135deg, #CD7F32, #8B4513);
+            color: #fff;
+        }
+
+        .rank-regular .rank-number {
+            background: rgba(255, 255, 255, 0.05);
+            color: var(--text);
+        }
 
         .asn-cell {
             font-family: 'Courier New', monospace;
@@ -139,26 +219,76 @@
         }
 
         .org-cell {
-            font-weight: 500;
             max-width: 250px;
+        }
+
+        .isp-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .org-name {
+            font-weight: 600;
+            font-size: 14px;
+            color: var(--text);
             overflow: hidden;
             text-overflow: ellipsis;
             white-space: nowrap;
         }
 
-        .grade-cell {
-            text-align: center;
-            font-weight: 600;
-            font-size: 16px;
-            width: 80px;
+        .asn-code {
+            font-family: 'SF Mono', 'Monaco', 'Courier New', monospace;
+            font-size: 12px;
+            color: var(--accent);
+            opacity: 0.8;
         }
 
-        .grade-a-plus { color: #00ff00; }
-        .grade-a { color: #90ee90; }
-        .grade-b { color: #ffff00; }
-        .grade-c { color: #ffa500; }
-        .grade-d { color: #ff6347; }
-        .grade-f { color: #ff0000; }
+        .grade-cell {
+            text-align: center;
+            width: 100px;
+        }
+
+        .grade-badge-table {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-weight: 700;
+            font-size: 14px;
+            min-width: 45px;
+        }
+
+        .grade-badge-table.a-plus {
+            background: linear-gradient(135deg, #00C851, #00FF00);
+            color: #000;
+        }
+
+        .grade-badge-table.a {
+            background: linear-gradient(135deg, #28a745, #34ce57);
+            color: white;
+        }
+
+        .grade-badge-table.b {
+            background: linear-gradient(135deg, #17a2b8, #20c997);
+            color: white;
+        }
+
+        .grade-badge-table.c {
+            background: linear-gradient(135deg, #ffc107, #ffca2c);
+            color: #000;
+        }
+
+        .grade-badge-table.d {
+            background: linear-gradient(135deg, #fd7e14, #ff8c42);
+            color: white;
+        }
+
+        .grade-badge-table.f {
+            background: linear-gradient(135deg, #dc3545, #e55353);
+            color: white;
+        }
 
         .tests-cell {
             text-align: center;
@@ -169,16 +299,39 @@
 
         .country-cell {
             text-align: center;
-            font-weight: 500;
-            width: 80px;
+            width: 90px;
+        }
+
+        .subtitle {
+            font-size: 16px;
+            opacity: 0.8;
+            margin-top: 8px;
         }
 
         .metric-cell {
             text-align: center;
-            font-family: 'Courier New', monospace;
-            font-size: 12px;
-            width: 90px;
-            color: var(--accent);
+            font-family: 'SF Mono', 'Monaco', 'Courier New', monospace;
+            font-size: 13px;
+            width: 110px;
+            position: relative;
+        }
+
+        .metric-value {
+            font-weight: 600;
+            position: relative;
+            z-index: 2;
+        }
+
+        .metric-good {
+            color: #00C851;
+        }
+
+        .metric-fair {
+            color: #FFD700;
+        }
+
+        .metric-poor {
+            color: #FF6B6B;
         }
 
         .confidence-indicator {
@@ -224,34 +377,55 @@
         }
 
         .stats-container {
-            display: flex;
-            gap: 20px;
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.05) 0%, rgba(255, 255, 255, 0.02) 100%);
+            backdrop-filter: blur(10px);
+            border-radius: 12px;
+            padding: 20px;
             margin-bottom: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+        }
+
+        .stats-group {
+            display: flex;
+            align-items: center;
+            gap: 30px;
             flex-wrap: wrap;
         }
 
-        .stat-box {
-            background-color: var(--secondary);
-            border-radius: 6px;
-            padding: 15px;
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            flex: 1;
-            min-width: 150px;
-            text-align: center;
+        .stat-item {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .stat-icon {
+            font-size: 20px;
+            opacity: 0.9;
+        }
+
+        .stat-content {
+            display: flex;
+            flex-direction: column;
         }
 
         .stat-value {
-            font-size: 24px;
+            font-size: 18px;
             font-weight: 600;
-            color: var(--accent);
-            display: block;
+            color: var(--text);
+            line-height: 1;
         }
 
         .stat-label {
-            font-size: 12px;
+            font-size: 11px;
             color: var(--text);
-            opacity: 0.8;
-            margin-top: 5px;
+            opacity: 0.7;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
         }
 
         /* Mobile responsiveness */
@@ -302,48 +476,68 @@
             <div class="logo-container">
                 <img src="logo.svg" alt="LibreQoS Logo" class="logo">
                 <h1>LibreQoS ISP Rankings</h1>
-    <p>Single User Mode: Latency & Bufferbloat Performance Rankings by ISP</p>
+                <p class="subtitle">Single User Mode: Latency & Bufferbloat Performance Rankings</p>
                 <div id="sponsorInfo" class="sponsor-info" style="display: none;"></div>
             </div>
         </header>
 
         <div class="rankings-container">
             <div class="filters-container">
-                
-                <div class="filter-group">
-                    <span class="filter-label">Country Filter:</span>
-                    <select class="country-filter" id="countryFilter">
-                        <option value="">All Countries</option>
-                        <option value="US">United States</option>
-                        <option value="CA">Canada</option>
-                        <option value="GB">United Kingdom</option>
-                        <option value="DE">Germany</option>
-                        <option value="FR">France</option>
-                        <option value="AU">Australia</option>
-                        <option value="JP">Japan</option>
-                        <option value="NL">Netherlands</option>
-                        <option value="SE">Sweden</option>
-                        <option value="CH">Switzerland</option>
-                    </select>
+                <div class="search-container">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" class="search-input" id="searchInput" placeholder="Search ISP name or ASN...">
                 </div>
+                <select class="filter-select" id="countryFilter">
+                    <option value="">All Countries</option>
+                    <option value="US">🇺🇸 United States</option>
+                    <option value="CA">🇨🇦 Canada</option>
+                    <option value="GB">🇬🇧 United Kingdom</option>
+                    <option value="DE">🇩🇪 Germany</option>
+                    <option value="FR">🇫🇷 France</option>
+                    <option value="AU">🇦🇺 Australia</option>
+                    <option value="JP">🇯🇵 Japan</option>
+                    <option value="NL">🇳🇱 Netherlands</option>
+                    <option value="SE">🇺🇪 Sweden</option>
+                    <option value="CH">🇨🇭 Switzerland</option>
+                </select>
+                <select class="filter-select" id="gradeFilter">
+                    <option value="">All Grades</option>
+                    <option value="A">A+ / A Only</option>
+                    <option value="B">B or Better</option>
+                    <option value="C">C or Better</option>
+                </select>
             </div>
 
             <div class="stats-container" id="statsContainer">
-                <div class="stat-box">
-                    <span class="stat-value" id="totalASNs">-</span>
-                    <span class="stat-label">ISPs Ranked</span>
-                </div>
-                <div class="stat-box">
-                    <span class="stat-value" id="totalTests">-</span>
-                    <span class="stat-label">Total Tests</span>
-                </div>
-                <div class="stat-box">
-                    <span class="stat-value" id="avgGrade">-</span>
-                    <span class="stat-label">Average Grade</span>
-                </div>
-                <div class="stat-box">
-                    <span class="stat-value" id="lastUpdate">-</span>
-                    <span class="stat-label">Last Updated</span>
+                <div class="stats-group">
+                    <div class="stat-item">
+                        <span class="stat-icon">🏢</span>
+                        <div class="stat-content">
+                            <span class="stat-value" id="totalASNs">-</span>
+                            <span class="stat-label">ISPs Ranked</span>
+                        </div>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-icon">📊</span>
+                        <div class="stat-content">
+                            <span class="stat-value" id="totalTests">-</span>
+                            <span class="stat-label">Total Tests</span>
+                        </div>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-icon">⭐</span>
+                        <div class="stat-content">
+                            <span class="stat-value" id="avgGrade">-</span>
+                            <span class="stat-label">Average Grade</span>
+                        </div>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-icon">🕐</span>
+                        <div class="stat-content">
+                            <span class="stat-value" id="lastUpdate">-</span>
+                            <span class="stat-label">Last Updated</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -367,10 +561,10 @@
                             <th class="sortable" data-sort="name">Organization</th>
                             <th class="sortable" data-sort="grade">ASN Grade</th>
                             <th class="sortable" data-sort="tests">Tests</th>
-                            <th class="sortable" data-sort="baseline_latency">Avg Baseline (ms)</th>
-                            <th class="sortable" data-sort="download_increase">Avg Download Increase (ms)</th>
-                            <th class="sortable" data-sort="upload_increase">Avg Upload Increase (ms)</th>
-                            <th class="sortable" data-sort="bidirectional_increase">Avg Bidirectional Increase (ms)</th>
+                            <th class="sortable" data-sort="baseline_latency">Baseline (ms)</th>
+                            <th class="sortable" data-sort="download_increase">Download Increase</th>
+                            <th class="sortable" data-sort="upload_increase">Upload Increase (ms)</th>
+                            <th class="sortable" data-sort="bidirectional_increase">Bidi Increase (ms)</th>
                             <th class="sortable" data-sort="country">Country</th>
                         </tr>
                     </thead>
@@ -388,6 +582,8 @@
         let currentSort = 'rank';
         let currentOrder = 'asc';
         let rankingsData = [];
+        let currentSearch = '';
+        let currentGradeFilter = '';
 
         // Initialize page
         document.addEventListener('DOMContentLoaded', function() {
@@ -397,10 +593,27 @@
         });
 
         function setupEventListeners() {
+            // Search input
+            const searchInput = document.getElementById('searchInput');
+            let searchTimeout;
+            searchInput.addEventListener('input', function() {
+                clearTimeout(searchTimeout);
+                searchTimeout = setTimeout(() => {
+                    currentSearch = this.value.toLowerCase();
+                    filterAndDisplayRankings();
+                }, 300);
+            });
+
             // Country filter
             document.getElementById('countryFilter').addEventListener('change', function() {
                 currentCountry = this.value;
                 loadRankings();
+            });
+
+            // Grade filter
+            document.getElementById('gradeFilter').addEventListener('change', function() {
+                currentGradeFilter = this.value;
+                filterAndDisplayRankings();
             });
 
             // Table sorting
@@ -414,7 +627,7 @@
                         currentOrder = sortField === 'rank' ? 'asc' : 'desc';
                     }
                     updateSortHeaders();
-                    sortAndDisplayRankings();
+                    filterAndDisplayRankings();
                 });
             });
         }
@@ -470,7 +683,7 @@
                 rankingsData = data.rankings || [];
                 
                 updateStats(data);
-                sortAndDisplayRankings();
+                filterAndDisplayRankings();
                 showRankings();
                 
             } catch (error) {
@@ -501,11 +714,48 @@
 
         function formatLastUpdate(timestamp) {
             if (!timestamp) return '-';
+            // Handle ISO string format (e.g., "2025-01-13T12:34:56.789Z")
+            if (typeof timestamp === 'string') {
+                return new Date(timestamp).toLocaleString();
+            }
+            // Handle Unix timestamp (seconds since epoch)
             return new Date(timestamp * 1000).toLocaleString();
         }
 
-        function sortAndDisplayRankings() {
-            const sortedData = [...rankingsData].sort((a, b) => {
+        function filterAndDisplayRankings() {
+            let filteredData = [...rankingsData];
+
+            // Apply search filter
+            if (currentSearch) {
+                filteredData = filteredData.filter(isp => {
+                    const searchTerm = currentSearch.toLowerCase();
+                    return (isp.organization && isp.organization.toLowerCase().includes(searchTerm)) ||
+                           (isp.asn && isp.asn.toLowerCase().includes(searchTerm));
+                });
+            }
+
+            // Apply grade filter
+            if (currentGradeFilter) {
+                const gradeMap = {'A+': 6, 'A': 5, 'B': 4, 'C': 3, 'D': 2, 'F': 1};
+                filteredData = filteredData.filter(isp => {
+                    const ispGradeValue = gradeMap[isp.asn_grade] || 0;
+                    if (currentGradeFilter === 'A') {
+                        return ispGradeValue >= 5; // A or A+
+                    } else if (currentGradeFilter === 'B') {
+                        return ispGradeValue >= 4; // B or better
+                    } else if (currentGradeFilter === 'C') {
+                        return ispGradeValue >= 3; // C or better
+                    }
+                    return true;
+                });
+            }
+
+            sortAndDisplayRankings(filteredData);
+        }
+
+        function sortAndDisplayRankings(dataToSort = null) {
+            const data = dataToSort || rankingsData;
+            const sortedData = [...data].sort((a, b) => {
                 let aVal, bVal;
 
                 switch (currentSort) {
@@ -579,24 +829,49 @@
                 
                 let rankDisplay = isp.rank || (index + 1);
                 let rankClass = '';
-                if (rankDisplay <= 3) {
-                    rankClass = 'top-3';
-                    if (rankDisplay === 1) rankDisplay = '🥇 ' + rankDisplay;
-                    else if (rankDisplay === 2) rankDisplay = '🥈 ' + rankDisplay;
-                    else if (rankDisplay === 3) rankDisplay = '🥉 ' + rankDisplay;
+                if (rankDisplay === 1) rankClass = 'rank-1';
+                else if (rankDisplay === 2) rankClass = 'rank-2';
+                else if (rankDisplay === 3) rankClass = 'rank-3';
+                else rankClass = 'rank-regular';
+
+                // Format metrics with color coding
+                function formatMetric(value, type = 'latency') {
+                    if (!value || value === 'N/A') return 'N/A';
+                    const numValue = parseFloat(value);
+                    let colorClass = '';
+                    
+                    if (type === 'baseline') {
+                        colorClass = numValue < 100 ? 'metric-good' : numValue < 150 ? 'metric-fair' : 'metric-poor';
+                    } else {
+                        colorClass = numValue < 30 ? 'metric-good' : numValue < 100 ? 'metric-fair' : 'metric-poor';
+                    }
+                    
+                    return `<span class="metric-value ${colorClass}">${numValue.toFixed(1)}</span>`;
                 }
 
+                // Format country with flag
+                const countryFlags = {
+                    'US': '🇺🇸', 'CA': '🇨🇦', 'GB': '🇬🇧', 'DE': '🇩🇪', 'FR': '🇫🇷',
+                    'AU': '🇦🇺', 'JP': '🇯🇵', 'NL': '🇳🇱', 'SE': '🇸🇪', 'CH': '🇨🇭'
+                };
+                const countryDisplay = countryFlags[isp.country] ? `${countryFlags[isp.country]} ${isp.country}` : isp.country || 'N/A';
+
                 row.innerHTML = `
-                    <td class="rank-cell ${rankClass}">${rankDisplay}</td>
+                    <td class="rank-cell ${rankClass}"><span class="rank-number">${rankDisplay}</span></td>
                     <td class="asn-cell">${isp.asn || 'N/A'}</td>
-                    <td class="org-cell" title="${isp.organization || 'Unknown'}">${isp.organization || 'Unknown Organization'}</td>
-                    <td class="grade-cell ${gradeClass}">${grade}</td>
+                    <td class="org-cell">
+                        <div class="isp-info">
+                            <div class="org-name" title="${isp.organization || 'Unknown'}">${isp.organization || 'Unknown Organization'}</div>
+                            <div class="asn-code">${isp.asn || 'N/A'}</div>
+                        </div>
+                    </td>
+                    <td class="grade-cell"><span class="grade-badge-table ${gradeClass}">${grade}</span></td>
                     <td class="tests-cell">${(isp.tests || 0).toLocaleString()}</td>
-                    <td class="metric-cell">${isp.avg_baseline_ms || 'N/A'}</td>
-                    <td class="metric-cell">${isp.avg_download_increase_ms || 'N/A'}</td>
-                    <td class="metric-cell">${isp.avg_upload_increase_ms || 'N/A'}</td>
-                    <td class="metric-cell">${isp.avg_bidirectional_increase_ms || 'N/A'}</td>
-                    <td class="country-cell">${isp.country || 'N/A'}</td>
+                    <td class="metric-cell">${formatMetric(isp.avg_baseline_ms, 'baseline')}</td>
+                    <td class="metric-cell">${formatMetric(isp.avg_download_increase_ms)}</td>
+                    <td class="metric-cell">${formatMetric(isp.avg_upload_increase_ms)}</td>
+                    <td class="metric-cell">${formatMetric(isp.avg_bidirectional_increase_ms)}</td>
+                    <td class="country-cell">${countryDisplay}</td>
                 `;
                 
                 tbody.appendChild(row);
