@@ -14,6 +14,7 @@ class HouseholdWarmup {
         this.bytesReceived = 0;
         this.lastSampleTime = 0;
         this.lastSampleBytes = 0;
+        this.preciseDurationTimeout = null; // PHASE 1 FIX: Track precise timeout for cleanup
     }
 
     /**
@@ -92,13 +93,19 @@ class HouseholdWarmup {
             };
         } finally {
             this.isRunning = false;
+            // PHASE 1 FIX: Ensure precise timeout is cleaned up
+            if (this.preciseDurationTimeout) {
+                clearTimeout(this.preciseDurationTimeout);
+                this.preciseDurationTimeout = null;
+            }
         }
     }
 
     async _startBulkDownload() {
         const controller = new AbortController();
-        // Greatly increased timeout: duration + 30 seconds to allow for TCP ramp-up and auth overhead
-        const timeoutId = setTimeout(() => controller.abort(), this.duration + 30000);
+        // PHASE 1 TERMINATION FIX: Shorter timeout, will be aborted when warmup ends
+        const timeoutId = setTimeout(() => controller.abort(), this.duration + 5000);
+        let reader = null;
 
         try {
             // Import server discovery for distributed architecture
@@ -113,7 +120,7 @@ class HouseholdWarmup {
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
 
-            const reader = response.body.getReader();
+            reader = response.body.getReader();
             
             while (this.isRunning) {
                 const { done, value } = await reader.read();
@@ -125,6 +132,9 @@ class HouseholdWarmup {
                 }
             }
 
+            // PHASE 1 TERMINATION FIX: Explicitly close reader when warmup ends
+            console.log('📡 Warmup duration completed, closing bulk download reader');
+
         } catch (error) {
             if (error.name === 'AbortError') {
                 console.log('📡 Download aborted (normal for warmup)');
@@ -132,15 +142,47 @@ class HouseholdWarmup {
                 throw error;
             }
         } finally {
+            // PHASE 1 TERMINATION FIX: Ensure reader is always closed and controller aborted
+            if (reader) {
+                try {
+                    await reader.cancel();
+                    console.log('📡 Bulk download reader cancelled');
+                } catch (e) {
+                    console.log('📡 Reader cancel error (may be normal):', e.message);
+                }
+            }
+            
+            // Force abort the controller to terminate server-side stream
+            if (!controller.signal.aborted) {
+                controller.abort();
+                console.log('📡 Bulk download controller aborted');
+            }
+            
             clearTimeout(timeoutId);
         }
     }
 
     async _startSampling() {
         return new Promise((resolve) => {
+            // PHASE 1 TERMINATION FIX: Use precise timeout for exact 10-second duration
+            // Set up a precise timeout to ensure exactly 10 seconds regardless of sampling interval
+            this.preciseDurationTimeout = setTimeout(() => {
+                console.log('⏰ PRECISE TIMEOUT: Phase 1 terminating after exactly 10 seconds');
+                this.isRunning = false;
+                if (sampleTimer) {
+                    clearInterval(sampleTimer);
+                }
+                this.preciseDurationTimeout = null; // Clear reference
+                resolve();
+            }, this.duration);
+
             const sampleTimer = setInterval(() => {
                 if (!this.isRunning) {
                     clearInterval(sampleTimer);
+                    if (this.preciseDurationTimeout) {
+                        clearTimeout(this.preciseDurationTimeout);
+                        this.preciseDurationTimeout = null;
+                    }
                     resolve();
                     return;
                 }
@@ -148,13 +190,9 @@ class HouseholdWarmup {
                 const now = performance.now();
                 const elapsed = now - this.startTime;
 
-                if (elapsed >= this.duration) {
-                    this.isRunning = false;
-                    clearInterval(sampleTimer);
-                    resolve();
-                    return;
-                }
-
+                // Remove the interval-based duration check to prevent early termination
+                // The precise timeout above will handle the exact termination timing
+                
                 // Calculate throughput for this sample
                 const sampleDuration = (now - this.lastSampleTime) / 1000; // seconds
                 const sampleBytes = this.bytesReceived - this.lastSampleBytes;
@@ -163,7 +201,7 @@ class HouseholdWarmup {
                     const throughputMbps = (sampleBytes * 8) / (sampleDuration * 1000000);
                     this.samples.push(throughputMbps);
                     
-                    console.log(`📊 Sample ${this.samples.length}: ${throughputMbps.toFixed(1)} Mbps`);
+                    console.log(`📊 Sample ${this.samples.length}: ${throughputMbps.toFixed(1)} Mbps (${elapsed.toFixed(0)}ms elapsed)`);
                 }
 
                 this.lastSampleTime = now;
@@ -212,9 +250,19 @@ class HouseholdWarmup {
 
     /**
      * Stop the warmup measurement
+     * PHASE 1 TERMINATION FIX: Explicit cleanup method
      */
     stop() {
+        console.log('🛑 PHASE 1 TERMINATION: Explicitly stopping warmup measurement');
         this.isRunning = false;
+        
+        // PHASE 1 FIX: Clean up precise timeout on manual stop
+        if (this.preciseDurationTimeout) {
+            clearTimeout(this.preciseDurationTimeout);
+            this.preciseDurationTimeout = null;
+        }
+        
+        console.log('✅ PHASE 1 TERMINATION: Warmup measurement stopped');
     }
 }
 

@@ -150,6 +150,11 @@ class AdaptiveController {
             
             console.log(`✅ Speed detection complete: ${this.warmupResults.download80th.toFixed(1)} Mbps`);
 
+            // PHASE 1 TERMINATION FIX: Explicitly stop warmup to terminate bulk download
+            console.log('🛑 PHASE TRANSITION: Stopping warmup controller to terminate bulk download');
+            this.warmupController.stop();
+            console.log('✅ PHASE TRANSITION: Warmup controller stopped, Phase 1 terminated');
+
             // Update Computer profile with detected speed (but don't send to server yet)
             const detectedSpeed = this.warmupResults.download80th;
             this.virtualHousehold.userConfigs.computer.targetDownload = detectedSpeed;

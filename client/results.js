@@ -158,10 +158,10 @@ async function analyzeAndDisplayResults(testData) {
         const bidirectionalLoadedLatency = bidirectionalStats.average;
         
         // Calculate latency increases for display purposes (still useful for user understanding)
-        // Using 75th percentile for both baseline and loaded measurements for consistency
-        const downloadLatencyIncrease = downloadStats.p75 - baselineStats.p75;
-        const uploadLatencyIncrease = uploadStats.p75 - baselineStats.p75;
-        const bidirectionalLatencyIncrease = bidirectionalStats.p75 - baselineStats.p75;
+        // Using average loaded latency vs 75th percentile baseline for meaningful comparison
+        const downloadLatencyIncrease = downloadStats.average - baselineStats.p75;
+        const uploadLatencyIncrease = uploadStats.average - baselineStats.p75;
+        const bidirectionalLatencyIncrease = bidirectionalStats.average - baselineStats.p75;
         
         // Determine the grades for each component using appropriate thresholds
         const baselineGrade = await determineBaselineGrade(baselineStats.p75);
