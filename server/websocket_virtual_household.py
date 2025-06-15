@@ -1061,16 +1061,14 @@ class HighPerformanceSessionManager:
                 logger.info(f"🛑 SESSION_STOP: Stopped real traffic session for {user_id}")
             else:
                 logger.warning(f"🔍 SESSION_STOP: Session not found for {user_id}")
-                
-                # Only stop background tasks if ALL sessions are gone AND we're in a clean shutdown
-                # Don't stop during normal operation when individual connections fail
-                active_sessions = len([s for s in self.sessions.values() if s.active])
-                if not self.sessions and self.running and active_sessions == 0:
-                    logger.info(f"🔄 All sessions ended, stopping background tasks")
-                    await self.stop_background_tasks()
-                else:
-                    
-                    pass
+            
+            # Check if ALL sessions are gone and stop background tasks if so
+            active_sessions = len([s for s in self.sessions.values() if s.active])
+            if not self.sessions and self.running and active_sessions == 0:
+                logger.info(f"🔄 All sessions ended, stopping background tasks")
+                await self.stop_background_tasks()
+            else:
+                logger.debug(f"🔍 SESSION_STOP: Sessions remaining: {len(self.sessions)}, Active: {active_sessions}")
         except Exception as e:
             logger.error(f"❌ Error stopping session for {user_id}: {e}")
     
@@ -1832,13 +1830,26 @@ async def stop_user_sessions(test_id: str, request: Request):
         # Find all sessions that match the test ID
         sessions_to_stop = []
         for session_id, session in list(session_manager.sessions.items()):
-            # Extract timestamp from session ID (e.g., "alex_1749143640811" -> "1749143640811")
+            # Extract test ID from session ID (e.g., "alex_1750001145" -> "1750001145")
             if '_' in session_id:
-                session_timestamp = session_id.split('_')[1]
-                # Convert to test ID format (seconds instead of milliseconds)
-                session_test_id = str(int(session_timestamp) // 1000)
+                session_test_id = session_id.split('_')[1]
+                # Direct string match for test ID (new format)
                 if session_test_id == test_id:
                     sessions_to_stop.append(session_id)
+                    logger.info(f"🎯 EXACT MATCH: Session {session_id} matches test ID {test_id}")
+                    continue
+                
+                # Legacy support: Try timestamp conversion for old session IDs
+                try:
+                    if len(session_test_id) > 10:  # Likely a millisecond timestamp
+                        session_seconds = int(session_test_id) // 1000
+                        test_id_int = int(test_id)
+                        if abs(session_seconds - test_id_int) <= 10:
+                            sessions_to_stop.append(session_id)
+                            logger.info(f"🎯 LEGACY MATCH: Session {session_id} (timestamp: {session_seconds}) matches test ID {test_id}")
+                except ValueError:
+                    # Skip if conversion fails
+                    pass
             
             # Also support legacy "all" parameter for backward compatibility
             if test_id.lower() == 'all':

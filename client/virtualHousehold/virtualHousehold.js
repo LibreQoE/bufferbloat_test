@@ -591,16 +591,18 @@ class VirtualHousehold {
                 // Step 2: Connect directly to the dedicated user process WebSocket
                 let wsUrl = redirectInfo.websocket_url;
                 
-                // Token authentication removed
+                // Add test ID to WebSocket URL for proper session identification
+                const testId = Math.floor(this.testStartTime / 1000);
+                wsUrl += `?test_id=${testId}`;
                 
                 this.logger.log(`🌐 Connecting to dedicated ${userId} connection: ${wsUrl}`);
                 this.logger.log(`🔍 DEBUG: Dedicated WebSocket URL for ${userId}: ${wsUrl}`);
-                this.logger.log(`🔍 DEBUG: Port: ${redirectInfo.port}, Architecture: ${redirectInfo.architecture}`);
+                this.logger.log(`🔍 DEBUG: Test ID: ${testId}, Port: ${redirectInfo.port}, Architecture: ${redirectInfo.architecture}`);
                 this.logger.log(`🔍 DEBUG: Dedicated connection enabled: ${redirectInfo.process_isolation}`);
                 
                 // DIAGNOSTIC: Track WebSocket creation
                 this.logger.log(`🔍 DIAGNOSTIC: About to create WebSocket for ${userId} at ${wsUrl}`);
-                this.logger.log(`🔍 DIAGNOSTIC: Current timestamp: ${Date.now()}`);
+                this.logger.log(`🔍 DIAGNOSTIC: Current timestamp: ${Date.now()}, Test ID: ${testId}`);
                 this.logger.log(`🔍 DIAGNOSTIC: Existing connections before creation:`, Array.from(this.websocketConnections.keys()));
                 
                 const websocket = new WebSocket(wsUrl);
@@ -2664,27 +2666,19 @@ class VirtualHousehold {
                         // Force close the WebSocket - this is safe as it only affects this client
                         websocket.close(1000, 'Test stopped - force disconnect');
                         
+                        // Immediately clear all event handlers to prevent reconnection
+                        websocket.onopen = null;
+                        websocket.onmessage = null;
+                        websocket.onerror = null;
+                        websocket.onclose = null;
+                        
                         this.logger.log(`✅ Safely force closed WebSocket for ${userId}`);
                         
-                        // Create a promise that resolves when the WebSocket closes
+                        // Create a promise that resolves immediately since we've force closed
                         const closePromise = new Promise((resolve) => {
-                            const originalOnClose = websocket.onclose;
-                            websocket.onclose = (event) => {
-                                this.logger.log(`🔌 WebSocket closed for ${userId} (code: ${event.code}, reason: ${event.reason})`);
-                                if (originalOnClose) originalOnClose(event);
-                                resolve();
-                            };
-                            
-                            // Force close after a timeout if server doesn't close gracefully
-                            setTimeout(() => {
-                                if (websocket.readyState === WebSocket.OPEN) {
-                                    this.logger.log(`⏰ Force closing WebSocket for ${userId} after 2s timeout`);
-                                    websocket.close(1000, 'Test stopped - timeout');
-                                } else {
-                                    this.logger.log(`✅ WebSocket for ${userId} already closed naturally`);
-                                }
-                                resolve();
-                            }, 2000); // 2 second timeout
+                            // WebSocket is force closed, resolve immediately  
+                            this.logger.log(`🔌 WebSocket force closed for ${userId} (immediate cleanup)`);
+                            resolve();
                         });
                         
                         stopPromises.push(closePromise);
@@ -2706,13 +2700,19 @@ class VirtualHousehold {
                 this.logger.warn('⚠️ No WebSocket close promises to wait for in stopTest()');
             }
             
-            // Force close any remaining connections
+            // Force close any remaining connections and clear event handlers
             let remainingConnections = 0;
             for (const [userId, websocket] of this.websocketConnections) {
                 if (websocket.readyState === WebSocket.OPEN) {
                     remainingConnections++;
                     this.logger.log(`🔨 Force closing remaining WebSocket for ${userId}`);
                     websocket.close(1000, 'Test stopped - force close');
+                    
+                    // Clear all event handlers to prevent any further activity
+                    websocket.onopen = null;
+                    websocket.onmessage = null;
+                    websocket.onerror = null;
+                    websocket.onclose = null;
                 }
             }
             

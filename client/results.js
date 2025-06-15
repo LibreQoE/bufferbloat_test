@@ -158,18 +158,19 @@ async function analyzeAndDisplayResults(testData) {
         const bidirectionalLoadedLatency = bidirectionalStats.average;
         
         // Calculate latency increases for display purposes (still useful for user understanding)
-        const downloadLatencyIncrease = downloadStats.average - baselineStats.average;
-        const uploadLatencyIncrease = uploadStats.average - baselineStats.average;
-        const bidirectionalLatencyIncrease = bidirectionalStats.average - baselineStats.average;
+        // Using 75th percentile for both baseline and loaded measurements for consistency
+        const downloadLatencyIncrease = downloadStats.p75 - baselineStats.p75;
+        const uploadLatencyIncrease = uploadStats.p75 - baselineStats.p75;
+        const bidirectionalLatencyIncrease = bidirectionalStats.p75 - baselineStats.p75;
         
         // Determine the grades for each component using appropriate thresholds
-        const baselineGrade = await determineBaselineGrade(baselineStats.average);
+        const baselineGrade = await determineBaselineGrade(baselineStats.p75);
         const downloadGrade = await determineGrade(downloadLatencyIncrease);
         const uploadGrade = await determineGrade(uploadLatencyIncrease);
         const bidirectionalGrade = await determineGrade(bidirectionalLatencyIncrease);
         
         // Calculate Total Grade using new min(baseline, average_bloat) formula with latency increases
-        const totalGrade = await calculateTotalGradeFromLatency(baselineStats.average, downloadLatencyIncrease, uploadLatencyIncrease, bidirectionalLatencyIncrease);
+        const totalGrade = await calculateTotalGradeFromLatency(baselineStats.p75, downloadLatencyIncrease, uploadLatencyIncrease, bidirectionalLatencyIncrease);
         
         // Transform to unified format using adapter
         const adapter = createSingleUserAdapter();
@@ -213,7 +214,7 @@ async function analyzeAndDisplayResults(testData) {
                 bidirectional: bidirectionalGrade,
                 overall: totalGrade
             },
-            baselineLatency: baselineStats.average,
+            baselineLatency: baselineStats.p75,
             downloadLoadedLatency: Math.round(downloadLoadedLatency),
             uploadLoadedLatency: Math.round(uploadLoadedLatency),
             bidirectionalLoadedLatency: Math.round(bidirectionalLoadedLatency),

@@ -76,7 +76,7 @@ class WebSocketManager {
         return `${protocol}//${host}`;
     }
     
-    async createUserConnection(userId) {
+    async createUserConnection(userId, testId) {
         if (this.connections.has(userId)) {
             console.log(`🌐 Connection already exists for ${userId}`);
             return this.connections.get(userId);
@@ -86,7 +86,7 @@ class WebSocketManager {
             const startTime = Date.now();
             
             // Step 1: Get worker port from main server (direct connection optimization)
-            console.log(`🔍 Getting worker port for ${userId}...`);
+            console.log(`🔍 Getting worker port for ${userId} with test ID ${testId}...`);
             const response = await fetch(`${this.serverUrl}/ws/virtual-household/${userId}`);
             
             if (!response.ok) {
@@ -99,13 +99,13 @@ class WebSocketManager {
             // Step 2: Connect directly to worker process (bypass main server)
             let wsUrl;
             if (workerInfo.redirect && workerInfo.websocket_url) {
-                // Direct connection to worker process
-                wsUrl = workerInfo.websocket_url;
-                console.log(`🚀 Direct connection to worker for ${userId}: ${wsUrl}`);
+                // Direct connection to worker process with test ID
+                wsUrl = `${workerInfo.websocket_url}?test_id=${testId}`;
+                console.log(`🚀 Direct connection to worker for ${userId} with test ID ${testId}: ${wsUrl}`);
             } else {
-                // Fallback to main server routing
-                wsUrl = `${this.serverUrl}/ws/virtual-household-fallback/${userId}`;
-                console.log(`🔄 Fallback connection for ${userId}: ${wsUrl}`);
+                // Fallback to main server routing with test ID
+                wsUrl = `${this.serverUrl}/ws/virtual-household-fallback/${userId}?test_id=${testId}`;
+                console.log(`🔄 Fallback connection for ${userId} with test ID ${testId}: ${wsUrl}`);
             }
             
             const ws = new WebSocket(wsUrl);
@@ -722,13 +722,13 @@ class WebSocketManager {
     }
     
     // API compatibility methods for replacing WebRTC
-    async createUserChannels(userIds) {
-        console.log('🔗 Creating WebSocket connections for users:', userIds);
+    async createUserChannels(userIds, testId) {
+        console.log('🔗 Creating WebSocket connections for users:', userIds, 'with test ID:', testId);
         
         const connections = {};
         for (const userId of userIds) {
             try {
-                const ws = await this.createUserConnection(userId);
+                const ws = await this.createUserConnection(userId, testId);
                 connections[userId] = ws;
             } catch (error) {
                 console.error(`❌ Failed to create connection for ${userId}:`, error);

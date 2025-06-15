@@ -140,10 +140,16 @@ class SingleUserProcessServer:
         """Setup FastAPI routes for maximum performance"""
         
         @self.app.websocket(f"/ws/virtual-household/{self.user_type}")
-        async def websocket_user_endpoint(websocket: WebSocket):
+        async def websocket_user_endpoint(websocket: WebSocket, test_id: str = None):
             """High-performance WebSocket endpoint for this user type only"""
-            user_id = f"{self.user_type}_{int(time.time() * 1000)}"  # Unique ID
-            logger.info(f"🔌 {self.user_type.title()} WebSocket connection: {user_id}")
+            # Extract test_id from query parameters if provided
+            if test_id:
+                user_id = f"{self.user_type}_{test_id}"
+                logger.info(f"🔌 {self.user_type.title()} WebSocket connection with test ID: {user_id}")
+            else:
+                # Fallback to timestamp-based ID for backward compatibility
+                user_id = f"{self.user_type}_{int(time.time() * 1000)}"
+                logger.info(f"🔌 {self.user_type.title()} WebSocket connection (legacy): {user_id}")
             
             # Check WebSocket rate limits before accepting connection
             try:
