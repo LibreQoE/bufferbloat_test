@@ -51,8 +51,8 @@ async def warmup_bulk_download():
                         logger.info(f"📊 Warmup stream: {bytes_sent/1048576:.1f} MB sent, "
                                   f"{throughput_mbps:.1f} Mbps, {chunk_count} chunks")
                 
-                # Small delay to prevent overwhelming the connection
-                await asyncio.sleep(0.001)  # 1ms
+                # Remove artificial delay to allow full speed
+                # await asyncio.sleep(0.001)  # Removed - was limiting to ~15 Mbps
                 
         except Exception as e:
             elapsed = time.time() - start_time

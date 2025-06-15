@@ -1818,138 +1818,61 @@ async def stop_user_sessions(test_id: str, request: Request):
     when called from frontend, or handling direct stops when called from central server.
     """
     # Import here to avoid circular imports
-    import aiohttp
-    import ssl
     import socket
     
     try:
         logger.info(f"🛑 STOP_ENDPOINT: Received stop request for test ID: {test_id}")
         
-        # Check if we're running as the central server
-        SERVER_MODE = os.getenv('SERVER_MODE', 'isp')
-        IS_CENTRAL_SERVER = (
-            SERVER_MODE == 'central' or 
-            socket.getfqdn() == 'test.libreqos.com' or 
-            os.getenv('ENABLE_TELEMETRY', 'false').lower() == 'true'
-        )
+        # ISP server always handles stop signals directly (no central server relay)
+        logger.info(f"🏭 ISP_SERVER: Handling stop signal directly for test ID: {test_id}")
         
-        if not IS_CENTRAL_SERVER:
-            # This is an ISP server - handle the stop signal directly
-            logger.info(f"🏭 ISP_SERVER: Handling stop signal directly for test ID: {test_id}")
-            
-            stopped_sessions = []
-            total_sessions = len(session_manager.sessions)
-            
-            # Find all sessions that match the test ID
-            sessions_to_stop = []
-            for session_id, session in list(session_manager.sessions.items()):
-                # Extract timestamp from session ID (e.g., "alex_1749143640811" -> "1749143640811")
-                if '_' in session_id:
-                    session_timestamp = session_id.split('_')[1]
-                    # Convert to test ID format (seconds instead of milliseconds)
-                    session_test_id = str(int(session_timestamp) // 1000)
-                    if session_test_id == test_id:
-                        sessions_to_stop.append(session_id)
-                
-                # Also support legacy "all" parameter for backward compatibility
-                if test_id.lower() == 'all':
+        stopped_sessions = []
+        total_sessions = len(session_manager.sessions)
+        
+        # Find all sessions that match the test ID
+        sessions_to_stop = []
+        for session_id, session in list(session_manager.sessions.items()):
+            # Extract timestamp from session ID (e.g., "alex_1749143640811" -> "1749143640811")
+            if '_' in session_id:
+                session_timestamp = session_id.split('_')[1]
+                # Convert to test ID format (seconds instead of milliseconds)
+                session_test_id = str(int(session_timestamp) // 1000)
+                if session_test_id == test_id:
                     sessions_to_stop.append(session_id)
             
-            logger.info(f"🛑 ISP_SERVER: Found {len(sessions_to_stop)} sessions to stop for test ID '{test_id}': {sessions_to_stop}")
-            
-            # Stop each matching session
-            for session_id in sessions_to_stop:
-                try:
-                    logger.info(f"🛑 ISP_SERVER: Stopping session {session_id}")
-                    await session_manager.stop_session(session_id)
-                    stopped_sessions.append(session_id)
-                    logger.info(f"✅ ISP_SERVER: Successfully stopped session {session_id}")
-                except Exception as e:
-                    logger.error(f"❌ ISP_SERVER: Failed to stop session {session_id}: {e}")
-            
-            remaining_sessions = len(session_manager.sessions)
-            
-            logger.info(f"🛑 ISP_SERVER: Completed stop request for test ID '{test_id}' - "
-                       f"Stopped: {len(stopped_sessions)}, "
-                       f"Total before: {total_sessions}, "
-                       f"Remaining: {remaining_sessions}")
-            
-            return JSONResponse({
-                "success": True,
-                "test_id": test_id,
-                "stopped_sessions": stopped_sessions,
-                "stopped_count": len(stopped_sessions),
-                "total_sessions_before": total_sessions,
-                "remaining_sessions": remaining_sessions,
-                "message": f"ISP server stopped {len(stopped_sessions)} sessions for test ID '{test_id}'",
-                "server_type": "isp"
-            })
+            # Also support legacy "all" parameter for backward compatibility
+            if test_id.lower() == 'all':
+                sessions_to_stop.append(session_id)
         
-        # This is the central server - relay to ISP server
-        logger.info(f"🔄 CENTRAL_RELAY: Running as central server, relaying stop signal")
+        logger.info(f"🛑 ISP_SERVER: Found {len(sessions_to_stop)} sessions to stop for test ID '{test_id}': {sessions_to_stop}")
         
-        # Parse request body to get additional context
-        request_body = {}
-        try:
-            request_body = await request.json()
-        except:
-            # If no JSON body, create default
-            request_body = {
-                "action": "stop_all_sessions",
-                "reason": "test_completed",
-                "timestamp": time.time() * 1000
-            }
+        # Stop each matching session
+        for session_id in sessions_to_stop:
+            try:
+                logger.info(f"🛑 ISP_SERVER: Stopping session {session_id}")
+                await session_manager.stop_session(session_id)
+                stopped_sessions.append(session_id)
+                logger.info(f"✅ ISP_SERVER: Successfully stopped session {session_id}")
+            except Exception as e:
+                logger.error(f"❌ ISP_SERVER: Failed to stop session {session_id}: {e}")
         
-        # For now, relay to Dallas ISP server (test-dal.libreqos.com)
-        # In a full implementation, you would:
-        # 1. Look up which ISP server is handling this test_id
-        # 2. Route to the appropriate server
-        # For this implementation, we'll assume Dallas server
+        remaining_sessions = len(session_manager.sessions)
         
-        isp_server_url = "https://test-dal.libreqos.com"
-        relay_url = f"{isp_server_url}/api/virtual-household/stop-user-sessions/{test_id}"
+        logger.info(f"🛑 ISP_SERVER: Completed stop request for test ID '{test_id}' - "
+                   f"Stopped: {len(stopped_sessions)}, "
+                   f"Total before: {total_sessions}, "
+                   f"Remaining: {remaining_sessions}")
         
-        logger.info(f"🔄 CENTRAL_RELAY: Relaying to ISP server: {relay_url}")
-        
-        # Create SSL context for HTTPS requests
-        ssl_context = ssl.create_default_context()
-        ssl_context.check_hostname = False
-        ssl_context.verify_mode = ssl.CERT_NONE
-        
-        # Relay the stop signal to the ISP server
-        async with aiohttp.ClientSession(
-            timeout=aiohttp.ClientTimeout(total=10.0),
-            connector=aiohttp.TCPConnector(ssl=ssl_context)
-        ) as session:
-            async with session.post(
-                relay_url,
-                json=request_body,
-                headers={"Content-Type": "application/json"}
-            ) as response:
-                if response.status == 200:
-                    isp_response = await response.json()
-                    logger.info(f"✅ CENTRAL_RELAY: ISP server responded successfully: {isp_response}")
-                    
-                    # Return success with relay information
-                    return JSONResponse({
-                        "success": True,
-                        "message": "Stop signal relayed successfully to ISP server",
-                        "test_id": test_id,
-                        "relay_target": isp_server_url,
-                        "isp_response": isp_response,
-                        "server_type": "central"
-                    })
-                else:
-                    error_text = await response.text()
-                    logger.error(f"❌ CENTRAL_RELAY: ISP server returned error {response.status}: {error_text}")
-                    
-                    return JSONResponse({
-                        "success": False,
-                        "error": f"ISP server error: {response.status} - {error_text}",
-                        "test_id": test_id,
-                        "relay_target": isp_server_url,
-                        "server_type": "central"
-                    }, status_code=response.status)
+        return JSONResponse({
+            "success": True,
+            "test_id": test_id,
+            "stopped_sessions": stopped_sessions,
+            "stopped_count": len(stopped_sessions),
+            "total_sessions_before": total_sessions,
+            "remaining_sessions": remaining_sessions,
+            "message": f"ISP server stopped {len(stopped_sessions)} sessions for test ID '{test_id}'",
+            "server_type": "isp"
+        })
                     
     except Exception as e:
         logger.error(f"❌ STOP_ENDPOINT: Error handling stop signal for test ID '{test_id}': {e}")

@@ -488,7 +488,7 @@ class VirtualHousehold {
         this.logger.log('🏠 Starting Phase 2: Virtual Household Simulation with detected connection speed');
         this.isActive = true;
         this.startTime = performance.now();
-        this.testStartTime = this.startTime; // Store for test-specific identifiers
+        this.testStartTime = Date.now(); // Use actual timestamp for test identification
         
         try {
             // Dispatch test start event for UI
@@ -1596,10 +1596,15 @@ class VirtualHousehold {
                 
                 const { serverDiscovery } = await import('../discovery.js');
                 
-                // DISTRIBUTED ARCHITECTURE FIX: Always send stop signals to CENTRAL server
-                // Central server will then relay the stop signal to the appropriate ISP server
-                // This ensures proper session management without affecting other users
-                const stopUrl = `https://test.libreqos.com/api/virtual-household/stop-user-sessions/${this.testStartTime ? Math.floor(this.testStartTime / 1000).toString() : 'all'}`;
+                // Send stop signal directly to the ISP server we're connected to
+                let stopUrl;
+                if (serverDiscovery.currentServer) {
+                    // Use the ISP server URL from discovery
+                    stopUrl = `${serverDiscovery.currentServer.url}/api/virtual-household/stop-user-sessions/${this.testStartTime ? Math.floor(this.testStartTime / 1000).toString() : 'all'}`;
+                } else {
+                    // Fallback to current host if no server discovered
+                    stopUrl = `${window.location.protocol}//${window.location.host}/api/virtual-household/stop-user-sessions/${this.testStartTime ? Math.floor(this.testStartTime / 1000).toString() : 'all'}`;
+                }
                 
                 const stopResponse = await fetch(stopUrl, {
                     method: 'POST',
@@ -1766,9 +1771,9 @@ class VirtualHousehold {
             // Use the main server endpoint for stopping all sessions
             let stopUrl;
             if (serverDiscovery.currentServer) {
-                stopUrl = `${serverDiscovery.currentServer.url}/virtual-household/stop-user-sessions/${this.testStartTime}`;
+                stopUrl = `${serverDiscovery.currentServer.url}/api/virtual-household/stop-user-sessions/${this.testStartTime}`;
             } else {
-                stopUrl = `${window.location.protocol}//${window.location.host}/virtual-household/stop-user-sessions/all`;
+                stopUrl = `${window.location.protocol}//${window.location.host}/api/virtual-household/stop-user-sessions/all`;
             }
             
             console.log(`🔍 Distributed stop URL: ${stopUrl}`);
@@ -1832,10 +1837,10 @@ class VirtualHousehold {
             // instead of trying to reach dedicated processes on specific ports
             let processUrl;
             if (serverDiscovery.currentServer && hostname !== 'localhost' && hostname !== '127.0.0.1') {
-                // Distributed architecture: use main server endpoint
-                processUrl = `${protocol}://${hostname}/virtual-household/stop-user-sessions/all`;
-                console.log(`🔍 DISTRIBUTED MODE: Using main server stop endpoint instead of port ${port}`);
-                if (this.logger && this.logger.log) this.logger.log(`🔍 DISTRIBUTED MODE: Using main server stop endpoint instead of port ${port}`);
+                // Distributed architecture: use ISP server endpoint
+                processUrl = `${serverDiscovery.currentServer.url}/api/virtual-household/stop-user-sessions/all`;
+                console.log(`🔍 DISTRIBUTED MODE: Using ISP server stop endpoint: ${processUrl}`);
+                if (this.logger && this.logger.log) this.logger.log(`🔍 DISTRIBUTED MODE: Using ISP server stop endpoint: ${processUrl}`);
             } else {
                 // Local multiprocess architecture: use dedicated process ports
                 processUrl = `${protocol}://${hostname}:${port}/stop-session`;
