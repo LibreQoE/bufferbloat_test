@@ -213,8 +213,8 @@ class ISPTelemetryManager:
             metrics.get('download_latency_increase_ms', 0),
             metrics.get('upload_latency_increase_ms', 0),
             metrics.get('bidirectional_latency_increase_ms', 0),
-            single_user_score, grades.get('download'), grades.get('upload'),
-            grades.get('bidirectional'), grades.get('overall'),
+            single_user_score, self._extract_grade_string(grades.get('download')), self._extract_grade_string(grades.get('upload')),
+            self._extract_grade_string(grades.get('bidirectional')), self._extract_grade_string(grades.get('overall')),
             household_score, household_metrics.get('alex_performance'),
             household_metrics.get('sarah_performance'), household_metrics.get('jake_performance'),
             household_metrics.get('computer_performance'),
@@ -359,10 +359,25 @@ class ISPTelemetryManager:
     
     # Helper methods
     
-    def _grade_to_score(self, grade: str) -> Optional[int]:
+    def _extract_grade_string(self, grade) -> Optional[str]:
+        """Extract grade string from various grade formats"""
+        if isinstance(grade, str):
+            return grade
+        elif isinstance(grade, dict):
+            # Handle nested grade objects with 'letter' property
+            if 'letter' in grade:
+                return grade['letter']
+            elif 'grade' in grade:
+                return grade['grade']
+        
+        return None
+    
+    def _grade_to_score(self, grade) -> Optional[int]:
         """Convert letter grade to numeric score"""
         grade_map = {'A+': 100, 'A': 90, 'B': 80, 'C': 70, 'D': 60, 'F': 50}
-        return grade_map.get(grade)
+        
+        grade_string = self._extract_grade_string(grade)
+        return grade_map.get(grade_string) if grade_string else None
     
     def _calculate_household_score(self, household_metrics: Dict) -> Optional[int]:
         """Calculate overall household score from individual user grades"""
