@@ -217,10 +217,10 @@ async function analyzeAndDisplayResults(testData) {
             downloadLoadedLatency: Math.round(downloadLoadedLatency),
             uploadLoadedLatency: Math.round(uploadLoadedLatency),
             bidirectionalLoadedLatency: Math.round(bidirectionalLoadedLatency),
-            // Keep legacy fields for compatibility
-            downloadLatencyIncrease: Math.round(downloadLatencyIncrease),
-            uploadLatencyIncrease: Math.round(uploadLatencyIncrease),
-            bidirectionalLatencyIncrease: Math.round(bidirectionalLatencyIncrease),
+            // Keep legacy fields for compatibility - ensure non-negative values
+            downloadLatencyIncrease: Math.round(Math.max(0, downloadLatencyIncrease)),
+            uploadLatencyIncrease: Math.round(Math.max(0, uploadLatencyIncrease)),
+            bidirectionalLatencyIncrease: Math.round(Math.max(0, bidirectionalLatencyIncrease)),
             downloadThroughput: Math.round(downloadThroughputStats.median * 10) / 10,
             uploadThroughput: Math.round(uploadThroughputStats.median * 10) / 10,
             testDuration: 40 // Standard test duration

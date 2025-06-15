@@ -1156,7 +1156,7 @@ async def run_ping_server(port=8005, ssl_keyfile=None, ssl_certfile=None):
     if ssl_keyfile and ssl_certfile:
         config_kwargs["ssl_keyfile"] = ssl_keyfile
         config_kwargs["ssl_certfile"] = ssl_certfile
-        logger.info(f"Starting dedicated ping server with HTTPS on port {port}")
+        logger.info(f"Starting dedicated ping server with HTTPS on port {port} with full chain")
     else:
         logger.info(f"Starting dedicated ping server with HTTP on port {port}")
     
@@ -1179,7 +1179,7 @@ async def run_main_server(args):
     
     if args.ssl_keyfile and args.ssl_certfile:
         # Run with HTTPS using Uvicorn
-        logger.info(f"Starting HTTPS server on port {args.port}")
+        logger.info(f"Starting HTTPS server on port {args.port} with full certificate chain")
         config = uvicorn.Config(
             app,
             host="0.0.0.0",

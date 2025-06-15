@@ -12,7 +12,7 @@ const CHART_CONFIG = {
             data: [],
             borderColor: '#ffffff',
             backgroundColor: 'rgba(255, 255, 255, 0.1)',
-            borderWidth: 2,
+            borderWidth: 1.5,
             pointRadius: 1, // Consistent size for all points
             pointBackgroundColor: 'rgba(255, 255, 255, 0.8)', // Same color for all points
             pointBorderColor: 'rgba(255, 255, 255, 1)', // Same border for all points

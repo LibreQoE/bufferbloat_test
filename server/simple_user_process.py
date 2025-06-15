@@ -476,9 +476,22 @@ class SingleUserProcessServer:
         
         # Add SSL configuration if certificates are provided
         if ssl_keyfile and ssl_certfile:
-            config_kwargs["ssl_keyfile"] = ssl_keyfile
-            config_kwargs["ssl_certfile"] = ssl_certfile
-            logger.info(f"🔒 {self.user_type.title()} Process Server using SSL certificates")
+            try:
+                from ssl_helper import ensure_fullchain_pem
+                
+                # Verify certificate chain
+                if not ensure_fullchain_pem(ssl_certfile):
+                    logger.warning("⚠️  Certificate may not contain full chain - SSL verification issues possible")
+                
+                # Use uvicorn's built-in SSL support
+                config_kwargs["ssl_keyfile"] = ssl_keyfile
+                config_kwargs["ssl_certfile"] = ssl_certfile
+                logger.info(f"🔒 {self.user_type.title()} Process Server using SSL certificates with full chain")
+            except ImportError:
+                # Fallback to direct file paths if helper not available
+                config_kwargs["ssl_keyfile"] = ssl_keyfile
+                config_kwargs["ssl_certfile"] = ssl_certfile
+                logger.warning("SSL helper not available, using direct SSL file configuration")
         
         config = uvicorn.Config(**config_kwargs)
         server = uvicorn.Server(config)

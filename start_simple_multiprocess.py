@@ -136,7 +136,7 @@ class SimpleMultiProcessStarter:
             if self.ssl_enabled:
                 config_kwargs["ssl_keyfile"] = self.ssl_keyfile
                 config_kwargs["ssl_certfile"] = self.ssl_certfile
-                logger.info(f"🔒 Main server using SSL certificates")
+                logger.info(f"🔒 Main server using SSL certificates with full chain")
             
             config = uvicorn.Config(**config_kwargs)
             server = uvicorn.Server(config)
@@ -164,7 +164,7 @@ class SimpleMultiProcessStarter:
             if self.ssl_enabled:
                 config_kwargs["ssl_keyfile"] = self.ssl_keyfile
                 config_kwargs["ssl_certfile"] = self.ssl_certfile
-                logger.info(f"🔒 Ping server using SSL certificates")
+                logger.info(f"🔒 Ping server using SSL certificates with full chain")
             
             config = uvicorn.Config(**config_kwargs)
             server = uvicorn.Server(config)

@@ -91,9 +91,9 @@ class TelemetryManager {
         // Extract metrics directly from results (not from results.metrics)
         telemetryData.results.metrics = {
             baseline_latency_ms: results.baselineLatency || 0,
-            download_latency_increase_ms: results.downloadLatencyIncrease || 0,
-            upload_latency_increase_ms: results.uploadLatencyIncrease || 0,
-            bidirectional_latency_increase_ms: results.bidirectionalLatencyIncrease || 0,
+            download_latency_increase_ms: Math.max(0, results.downloadLatencyIncrease || 0),
+            upload_latency_increase_ms: Math.max(0, results.uploadLatencyIncrease || 0),
+            bidirectional_latency_increase_ms: Math.max(0, results.bidirectionalLatencyIncrease || 0),
             download_throughput_mbps: results.downloadThroughput || 0,
             upload_throughput_mbps: results.uploadThroughput || 0
         };

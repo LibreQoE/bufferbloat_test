@@ -489,16 +489,7 @@
                 </div>
                 <select class="filter-select" id="countryFilter">
                     <option value="">All Countries</option>
-                    <option value="US">🇺🇸 United States</option>
-                    <option value="CA">🇨🇦 Canada</option>
-                    <option value="GB">🇬🇧 United Kingdom</option>
-                    <option value="DE">🇩🇪 Germany</option>
-                    <option value="FR">🇫🇷 France</option>
-                    <option value="AU">🇦🇺 Australia</option>
-                    <option value="JP">🇯🇵 Japan</option>
-                    <option value="NL">🇳🇱 Netherlands</option>
-                    <option value="SE">🇺🇪 Sweden</option>
-                    <option value="CH">🇨🇭 Switzerland</option>
+                    <!-- Countries will be populated dynamically based on rankings data -->
                 </select>
                 <select class="filter-select" id="gradeFilter">
                     <option value="">All Grades</option>
@@ -666,7 +657,7 @@
                     sort: 'overall_grade',
                     order: 'desc',
                     limit: 100,
-                    min_tests: 10
+                    min_tests: 5
                 });
 
                 if (currentCountry) {
@@ -683,6 +674,7 @@
                 rankingsData = data.rankings || [];
                 
                 updateStats(data);
+                populateCountryDropdown();
                 filterAndDisplayRankings();
                 showRankings();
                 
@@ -690,6 +682,80 @@
                 console.error('Error loading rankings:', error);
                 showError(error.message);
             }
+        }
+
+        function populateCountryDropdown() {
+            const dropdown = document.getElementById('countryFilter');
+            const currentValue = dropdown.value;
+            
+            // Extract unique countries from rankings data
+            const countries = new Map();
+            rankingsData.forEach(isp => {
+                if (isp.country && isp.country !== 'Unknown' && isp.country !== 'N/A') {
+                    const countryCode = isp.country;
+                    const countryNames = {
+                        'PH': 'Philippines', 'US': 'United States', 'IN': 'India', 'RU': 'Russia', 'CA': 'Canada', 'GB': 'United Kingdom',
+                        'SG': 'Singapore', 'AU': 'Australia', 'CM': 'Cameroon', 'DE': 'Germany', 'ES': 'Spain', 'ID': 'Indonesia',
+                        'MX': 'Mexico', 'BR': 'Brazil', 'CN': 'China', 'FI': 'Finland', 'FR': 'France', 'GH': 'Ghana', 'HN': 'Honduras',
+                        'KZ': 'Kazakhstan', 'AF': 'Afghanistan', 'AL': 'Albania', 'DZ': 'Algeria', 'AD': 'Andorra', 'AO': 'Angola',
+                        'AI': 'Anguilla', 'AG': 'Antigua and Barbuda', 'AR': 'Argentina', 'AM': 'Armenia', 'AW': 'Aruba', 'AT': 'Austria',
+                        'AZ': 'Azerbaijan', 'BS': 'Bahamas', 'BH': 'Bahrain', 'BD': 'Bangladesh', 'BB': 'Barbados', 'BY': 'Belarus',
+                        'BE': 'Belgium', 'BZ': 'Belize', 'BJ': 'Benin', 'BM': 'Bermuda', 'BT': 'Bhutan', 'BO': 'Bolivia', 'BA': 'Bosnia and Herzegovina',
+                        'BW': 'Botswana', 'BN': 'Brunei', 'BG': 'Bulgaria', 'BF': 'Burkina Faso', 'BI': 'Burundi', 'CV': 'Cape Verde',
+                        'KH': 'Cambodia', 'KY': 'Cayman Islands', 'CF': 'Central African Republic', 'TD': 'Chad', 'CL': 'Chile', 'CO': 'Colombia',
+                        'KM': 'Comoros', 'CG': 'Congo', 'CD': 'Congo (DRC)', 'CR': 'Costa Rica', 'CI': 'Côte d\'Ivoire', 'HR': 'Croatia',
+                        'CU': 'Cuba', 'CY': 'Cyprus', 'CZ': 'Czech Republic', 'DK': 'Denmark', 'DJ': 'Djibouti', 'DM': 'Dominica',
+                        'DO': 'Dominican Republic', 'EC': 'Ecuador', 'EG': 'Egypt', 'SV': 'El Salvador', 'GQ': 'Equatorial Guinea',
+                        'ER': 'Eritrea', 'EE': 'Estonia', 'SZ': 'Eswatini', 'ET': 'Ethiopia', 'FJ': 'Fiji', 'GA': 'Gabon', 'GM': 'Gambia',
+                        'GE': 'Georgia', 'GR': 'Greece', 'GD': 'Grenada', 'GT': 'Guatemala', 'GN': 'Guinea', 'GW': 'Guinea-Bissau',
+                        'GY': 'Guyana', 'HT': 'Haiti', 'HU': 'Hungary', 'IS': 'Iceland', 'IR': 'Iran', 'IQ': 'Iraq', 'IE': 'Ireland',
+                        'IL': 'Israel', 'IT': 'Italy', 'JM': 'Jamaica', 'JP': 'Japan', 'JO': 'Jordan', 'KE': 'Kenya', 'KI': 'Kiribati',
+                        'KP': 'North Korea', 'KR': 'South Korea', 'KW': 'Kuwait', 'KG': 'Kyrgyzstan', 'LA': 'Laos', 'LV': 'Latvia',
+                        'LB': 'Lebanon', 'LS': 'Lesotho', 'LR': 'Liberia', 'LY': 'Libya', 'LI': 'Liechtenstein', 'LT': 'Lithuania',
+                        'LU': 'Luxembourg', 'MG': 'Madagascar', 'MW': 'Malawi', 'MY': 'Malaysia', 'MV': 'Maldives', 'ML': 'Mali',
+                        'MT': 'Malta', 'MH': 'Marshall Islands', 'MR': 'Mauritania', 'MU': 'Mauritius', 'FM': 'Micronesia', 'MD': 'Moldova',
+                        'MC': 'Monaco', 'MN': 'Mongolia', 'ME': 'Montenegro', 'MA': 'Morocco', 'MZ': 'Mozambique', 'MM': 'Myanmar',
+                        'NA': 'Namibia', 'NR': 'Nauru', 'NP': 'Nepal', 'NL': 'Netherlands', 'NZ': 'New Zealand', 'NI': 'Nicaragua',
+                        'NE': 'Niger', 'NG': 'Nigeria', 'NO': 'Norway', 'OM': 'Oman', 'PK': 'Pakistan', 'PW': 'Palau', 'PA': 'Panama',
+                        'PG': 'Papua New Guinea', 'PY': 'Paraguay', 'PE': 'Peru', 'PL': 'Poland', 'PT': 'Portugal', 'QA': 'Qatar',
+                        'RO': 'Romania', 'RW': 'Rwanda', 'KN': 'Saint Kitts and Nevis', 'LC': 'Saint Lucia', 'VC': 'Saint Vincent and the Grenadines',
+                        'WS': 'Samoa', 'SM': 'San Marino', 'ST': 'São Tomé and Príncipe', 'SA': 'Saudi Arabia', 'SN': 'Senegal',
+                        'RS': 'Serbia', 'SC': 'Seychelles', 'SL': 'Sierra Leone', 'SK': 'Slovakia', 'SI': 'Slovenia', 'SB': 'Solomon Islands',
+                        'SO': 'Somalia', 'ZA': 'South Africa', 'SS': 'South Sudan', 'LK': 'Sri Lanka', 'SD': 'Sudan', 'SR': 'Suriname',
+                        'SE': 'Sweden', 'CH': 'Switzerland', 'SY': 'Syria', 'TW': 'Taiwan', 'TJ': 'Tajikistan', 'TZ': 'Tanzania',
+                        'TH': 'Thailand', 'TL': 'Timor-Leste', 'TG': 'Togo', 'TO': 'Tonga', 'TT': 'Trinidad and Tobago', 'TN': 'Tunisia',
+                        'TR': 'Turkey', 'TM': 'Turkmenistan', 'TV': 'Tuvalu', 'UG': 'Uganda', 'UA': 'Ukraine', 'AE': 'United Arab Emirates',
+                        'UY': 'Uruguay', 'UZ': 'Uzbekistan', 'VU': 'Vanuatu', 'VE': 'Venezuela', 'VN': 'Vietnam', 'YE': 'Yemen',
+                        'ZM': 'Zambia', 'ZW': 'Zimbabwe'
+                    };
+                    
+                    const countryName = countryNames[countryCode] || countryCode;
+                    if (!countries.has(countryCode)) {
+                        countries.set(countryCode, { code: countryCode, name: countryName, count: 0 });
+                    }
+                    countries.get(countryCode).count++;
+                }
+            });
+            
+            // Clear existing options except "All Countries"
+            dropdown.innerHTML = '<option value="">All Countries</option>';
+            
+            // Sort countries by ISP count (descending) then by name
+            const sortedCountries = Array.from(countries.values()).sort((a, b) => {
+                if (b.count !== a.count) return b.count - a.count;
+                return a.name.localeCompare(b.name);
+            });
+            
+            // Add country options
+            sortedCountries.forEach(country => {
+                const option = document.createElement('option');
+                option.value = country.code;
+                option.textContent = `${country.name} (${country.count})`;
+                dropdown.appendChild(option);
+            });
+            
+            // Restore previous selection
+            dropdown.value = currentValue;
         }
 
         function updateStats(data) {
@@ -836,8 +902,9 @@
 
                 // Format metrics with color coding
                 function formatMetric(value, type = 'latency') {
-                    if (!value || value === 'N/A') return 'N/A';
+                    if (value === null || value === undefined || value === 'N/A' || value === '') return 'N/A';
                     const numValue = parseFloat(value);
+                    if (isNaN(numValue)) return 'N/A';
                     let colorClass = '';
                     
                     if (type === 'baseline') {
@@ -849,11 +916,67 @@
                     return `<span class="metric-value ${colorClass}">${numValue.toFixed(1)}</span>`;
                 }
 
-                // Format country with flag
+                // Format country with flag - comprehensive mapping
                 const countryFlags = {
-                    'US': '🇺🇸', 'CA': '🇨🇦', 'GB': '🇬🇧', 'DE': '🇩🇪', 'FR': '🇫🇷',
-                    'AU': '🇦🇺', 'JP': '🇯🇵', 'NL': '🇳🇱', 'SE': '🇸🇪', 'CH': '🇨🇭'
+                    'AF': '🇦🇫', 'AL': '🇦🇱', 'DZ': '🇩🇿', 'AD': '🇦🇩', 'AO': '🇦🇴', 'AI': '🇦🇮', 'AG': '🇦🇬', 'AR': '🇦🇷', 'AM': '🇦🇲', 'AW': '🇦🇼',
+                    'AU': '🇦🇺', 'AT': '🇦🇹', 'AZ': '🇦🇿', 'BS': '🇧🇸', 'BH': '🇧🇭', 'BD': '🇧🇩', 'BB': '🇧🇧', 'BY': '🇧🇾', 'BE': '🇧🇪', 'BZ': '🇧🇿',
+                    'BJ': '🇧🇯', 'BM': '🇧🇲', 'BT': '🇧🇹', 'BO': '🇧🇴', 'BA': '🇧🇦', 'BW': '🇧🇼', 'BR': '🇧🇷', 'BN': '🇧🇳', 'BG': '🇧🇬', 'BF': '🇧🇫',
+                    'BI': '🇧🇮', 'CV': '🇨🇻', 'KH': '🇰🇭', 'CM': '🇨🇲', 'CA': '🇨🇦', 'KY': '🇰🇾', 'CF': '🇨🇫', 'TD': '🇹🇩', 'CL': '🇨🇱', 'CN': '🇨🇳',
+                    'CO': '🇨🇴', 'KM': '🇰🇲', 'CG': '🇨🇬', 'CD': '🇨🇩', 'CR': '🇨🇷', 'CI': '🇨🇮', 'HR': '🇭🇷', 'CU': '🇨🇺', 'CY': '🇨🇾', 'CZ': '🇨🇿',
+                    'DK': '🇩🇰', 'DJ': '🇩🇯', 'DM': '🇩🇲', 'DO': '🇩🇴', 'EC': '🇪🇨', 'EG': '🇪🇬', 'SV': '🇸🇻', 'GQ': '🇬🇶', 'ER': '🇪🇷', 'EE': '🇪🇪',
+                    'SZ': '🇸🇿', 'ET': '🇪🇹', 'FJ': '🇫🇯', 'FI': '🇫🇮', 'FR': '🇫🇷', 'GA': '🇬🇦', 'GM': '🇬🇲', 'GE': '🇬🇪', 'DE': '🇩🇪', 'GH': '🇬🇭',
+                    'GR': '🇬🇷', 'GD': '🇬🇩', 'GT': '🇬🇹', 'GN': '🇬🇳', 'GW': '🇬🇼', 'GY': '🇬🇾', 'HT': '🇭🇹', 'HN': '🇭🇳', 'HU': '🇭🇺', 'IS': '🇮🇸',
+                    'IN': '🇮🇳', 'ID': '🇮🇩', 'IR': '🇮🇷', 'IQ': '🇮🇶', 'IE': '🇮🇪', 'IL': '🇮🇱', 'IT': '🇮🇹', 'JM': '🇯🇲', 'JP': '🇯🇵', 'JO': '🇯🇴',
+                    'KZ': '🇰🇿', 'KE': '🇰🇪', 'KI': '🇰🇮', 'KP': '🇰🇵', 'KR': '🇰🇷', 'KW': '🇰🇼', 'KG': '🇰🇬', 'LA': '🇱🇦', 'LV': '🇱🇻', 'LB': '🇱🇧',
+                    'LS': '🇱🇸', 'LR': '🇱🇷', 'LY': '🇱🇾', 'LI': '🇱🇮', 'LT': '🇱🇹', 'LU': '🇱🇺', 'MG': '🇲🇬', 'MW': '🇲🇼', 'MY': '🇲🇾', 'MV': '🇲🇻',
+                    'ML': '🇲🇱', 'MT': '🇲🇹', 'MH': '🇲🇭', 'MR': '🇲🇷', 'MU': '🇲🇺', 'MX': '🇲🇽', 'FM': '🇫🇲', 'MD': '🇲🇩', 'MC': '🇲🇨', 'MN': '🇲🇳',
+                    'ME': '🇲🇪', 'MA': '🇲🇦', 'MZ': '🇲🇿', 'MM': '🇲🇲', 'NA': '🇳🇦', 'NR': '🇳🇷', 'NP': '🇳🇵', 'NL': '🇳🇱', 'NZ': '🇳🇿', 'NI': '🇳🇮',
+                    'NE': '🇳🇪', 'NG': '🇳🇬', 'NO': '🇳🇴', 'OM': '🇴🇲', 'PK': '🇵🇰', 'PW': '🇵🇼', 'PA': '🇵🇦', 'PG': '🇵🇬', 'PY': '🇵🇾', 'PE': '🇵🇪',
+                    'PH': '🇵🇭', 'PL': '🇵🇱', 'PT': '🇵🇹', 'QA': '🇶🇦', 'RO': '🇷🇴', 'RU': '🇷🇺', 'RW': '🇷🇼', 'KN': '🇰🇳', 'LC': '🇱🇨', 'VC': '🇻🇨',
+                    'WS': '🇼🇸', 'SM': '🇸🇲', 'ST': '🇸🇹', 'SA': '🇸🇦', 'SN': '🇸🇳', 'RS': '🇷🇸', 'SC': '🇸🇨', 'SL': '🇸🇱', 'SG': '🇸🇬', 'SK': '🇸🇰',
+                    'SI': '🇸🇮', 'SB': '🇸🇧', 'SO': '🇸🇴', 'ZA': '🇿🇦', 'SS': '🇸🇸', 'ES': '🇪🇸', 'LK': '🇱🇰', 'SD': '🇸🇩', 'SR': '🇸🇷', 'SE': '🇸🇪',
+                    'CH': '🇨🇭', 'SY': '🇸🇾', 'TW': '🇹🇼', 'TJ': '🇹🇯', 'TZ': '🇹🇿', 'TH': '🇹🇭', 'TL': '🇹🇱', 'TG': '🇹🇬', 'TO': '🇹🇴', 'TT': '🇹🇹',
+                    'TN': '🇹🇳', 'TR': '🇹🇷', 'TM': '🇹🇲', 'TV': '🇹🇻', 'UG': '🇺🇬', 'UA': '🇺🇦', 'AE': '🇦🇪', 'GB': '🇬🇧', 'US': '🇺🇸', 'UY': '🇺🇾',
+                    'UZ': '🇺🇿', 'VU': '🇻🇺', 'VE': '🇻🇪', 'VN': '🇻🇳', 'YE': '🇾🇪', 'ZM': '🇿🇲', 'ZW': '🇿🇼'
                 };
+                
+                // Country names mapping
+                const countryNames = {
+                    'PH': 'Philippines', 'US': 'United States', 'IN': 'India', 'RU': 'Russia', 'CA': 'Canada', 'GB': 'United Kingdom',
+                    'SG': 'Singapore', 'AU': 'Australia', 'CM': 'Cameroon', 'DE': 'Germany', 'ES': 'Spain', 'ID': 'Indonesia',
+                    'MX': 'Mexico', 'BR': 'Brazil', 'CN': 'China', 'FI': 'Finland', 'FR': 'France', 'GH': 'Ghana', 'HN': 'Honduras',
+                    'KZ': 'Kazakhstan', 'AF': 'Afghanistan', 'AL': 'Albania', 'DZ': 'Algeria', 'AD': 'Andorra', 'AO': 'Angola',
+                    'AI': 'Anguilla', 'AG': 'Antigua and Barbuda', 'AR': 'Argentina', 'AM': 'Armenia', 'AW': 'Aruba', 'AT': 'Austria',
+                    'AZ': 'Azerbaijan', 'BS': 'Bahamas', 'BH': 'Bahrain', 'BD': 'Bangladesh', 'BB': 'Barbados', 'BY': 'Belarus',
+                    'BE': 'Belgium', 'BZ': 'Belize', 'BJ': 'Benin', 'BM': 'Bermuda', 'BT': 'Bhutan', 'BO': 'Bolivia', 'BA': 'Bosnia and Herzegovina',
+                    'BW': 'Botswana', 'BN': 'Brunei', 'BG': 'Bulgaria', 'BF': 'Burkina Faso', 'BI': 'Burundi', 'CV': 'Cape Verde',
+                    'KH': 'Cambodia', 'KY': 'Cayman Islands', 'CF': 'Central African Republic', 'TD': 'Chad', 'CL': 'Chile', 'CO': 'Colombia',
+                    'KM': 'Comoros', 'CG': 'Congo', 'CD': 'Congo (DRC)', 'CR': 'Costa Rica', 'CI': 'Côte d\'Ivoire', 'HR': 'Croatia',
+                    'CU': 'Cuba', 'CY': 'Cyprus', 'CZ': 'Czech Republic', 'DK': 'Denmark', 'DJ': 'Djibouti', 'DM': 'Dominica',
+                    'DO': 'Dominican Republic', 'EC': 'Ecuador', 'EG': 'Egypt', 'SV': 'El Salvador', 'GQ': 'Equatorial Guinea',
+                    'ER': 'Eritrea', 'EE': 'Estonia', 'SZ': 'Eswatini', 'ET': 'Ethiopia', 'FJ': 'Fiji', 'GA': 'Gabon', 'GM': 'Gambia',
+                    'GE': 'Georgia', 'GR': 'Greece', 'GD': 'Grenada', 'GT': 'Guatemala', 'GN': 'Guinea', 'GW': 'Guinea-Bissau',
+                    'GY': 'Guyana', 'HT': 'Haiti', 'HU': 'Hungary', 'IS': 'Iceland', 'IR': 'Iran', 'IQ': 'Iraq', 'IE': 'Ireland',
+                    'IL': 'Israel', 'IT': 'Italy', 'JM': 'Jamaica', 'JP': 'Japan', 'JO': 'Jordan', 'KE': 'Kenya', 'KI': 'Kiribati',
+                    'KP': 'North Korea', 'KR': 'South Korea', 'KW': 'Kuwait', 'KG': 'Kyrgyzstan', 'LA': 'Laos', 'LV': 'Latvia',
+                    'LB': 'Lebanon', 'LS': 'Lesotho', 'LR': 'Liberia', 'LY': 'Libya', 'LI': 'Liechtenstein', 'LT': 'Lithuania',
+                    'LU': 'Luxembourg', 'MG': 'Madagascar', 'MW': 'Malawi', 'MY': 'Malaysia', 'MV': 'Maldives', 'ML': 'Mali',
+                    'MT': 'Malta', 'MH': 'Marshall Islands', 'MR': 'Mauritania', 'MU': 'Mauritius', 'FM': 'Micronesia', 'MD': 'Moldova',
+                    'MC': 'Monaco', 'MN': 'Mongolia', 'ME': 'Montenegro', 'MA': 'Morocco', 'MZ': 'Mozambique', 'MM': 'Myanmar',
+                    'NA': 'Namibia', 'NR': 'Nauru', 'NP': 'Nepal', 'NL': 'Netherlands', 'NZ': 'New Zealand', 'NI': 'Nicaragua',
+                    'NE': 'Niger', 'NG': 'Nigeria', 'NO': 'Norway', 'OM': 'Oman', 'PK': 'Pakistan', 'PW': 'Palau', 'PA': 'Panama',
+                    'PG': 'Papua New Guinea', 'PY': 'Paraguay', 'PE': 'Peru', 'PL': 'Poland', 'PT': 'Portugal', 'QA': 'Qatar',
+                    'RO': 'Romania', 'RW': 'Rwanda', 'KN': 'Saint Kitts and Nevis', 'LC': 'Saint Lucia', 'VC': 'Saint Vincent and the Grenadines',
+                    'WS': 'Samoa', 'SM': 'San Marino', 'ST': 'São Tomé and Príncipe', 'SA': 'Saudi Arabia', 'SN': 'Senegal',
+                    'RS': 'Serbia', 'SC': 'Seychelles', 'SL': 'Sierra Leone', 'SK': 'Slovakia', 'SI': 'Slovenia', 'SB': 'Solomon Islands',
+                    'SO': 'Somalia', 'ZA': 'South Africa', 'SS': 'South Sudan', 'LK': 'Sri Lanka', 'SD': 'Sudan', 'SR': 'Suriname',
+                    'SE': 'Sweden', 'CH': 'Switzerland', 'SY': 'Syria', 'TW': 'Taiwan', 'TJ': 'Tajikistan', 'TZ': 'Tanzania',
+                    'TH': 'Thailand', 'TL': 'Timor-Leste', 'TG': 'Togo', 'TO': 'Tonga', 'TT': 'Trinidad and Tobago', 'TN': 'Tunisia',
+                    'TR': 'Turkey', 'TM': 'Turkmenistan', 'TV': 'Tuvalu', 'UG': 'Uganda', 'UA': 'Ukraine', 'AE': 'United Arab Emirates',
+                    'UY': 'Uruguay', 'UZ': 'Uzbekistan', 'VU': 'Vanuatu', 'VE': 'Venezuela', 'VN': 'Vietnam', 'YE': 'Yemen',
+                    'ZM': 'Zambia', 'ZW': 'Zimbabwe'
+                };
+                
                 const countryDisplay = countryFlags[isp.country] ? `${countryFlags[isp.country]} ${isp.country}` : isp.country || 'N/A';
 
                 row.innerHTML = `
