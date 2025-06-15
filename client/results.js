@@ -158,19 +158,19 @@ async function analyzeAndDisplayResults(testData) {
         const bidirectionalLoadedLatency = bidirectionalStats.average;
         
         // Calculate latency increases for display purposes (still useful for user understanding)
-        // Using average loaded latency vs 75th percentile baseline for meaningful comparison
-        const downloadLatencyIncrease = downloadStats.average - baselineStats.p75;
-        const uploadLatencyIncrease = uploadStats.average - baselineStats.p75;
-        const bidirectionalLatencyIncrease = bidirectionalStats.average - baselineStats.p75;
+        // Using average loaded latency vs 25th percentile baseline for meaningful comparison
+        const downloadLatencyIncrease = downloadStats.average - baselineStats.p25;
+        const uploadLatencyIncrease = uploadStats.average - baselineStats.p25;
+        const bidirectionalLatencyIncrease = bidirectionalStats.average - baselineStats.p25;
         
         // Determine the grades for each component using appropriate thresholds
-        const baselineGrade = await determineBaselineGrade(baselineStats.p75);
+        const baselineGrade = await determineBaselineGrade(baselineStats.p25);
         const downloadGrade = await determineGrade(downloadLatencyIncrease);
         const uploadGrade = await determineGrade(uploadLatencyIncrease);
         const bidirectionalGrade = await determineGrade(bidirectionalLatencyIncrease);
         
         // Calculate Total Grade using new min(baseline, average_bloat) formula with latency increases
-        const totalGrade = await calculateTotalGradeFromLatency(baselineStats.p75, downloadLatencyIncrease, uploadLatencyIncrease, bidirectionalLatencyIncrease);
+        const totalGrade = await calculateTotalGradeFromLatency(baselineStats.p25, downloadLatencyIncrease, uploadLatencyIncrease, bidirectionalLatencyIncrease);
         
         // Transform to unified format using adapter
         const adapter = createSingleUserAdapter();
@@ -214,7 +214,7 @@ async function analyzeAndDisplayResults(testData) {
                 bidirectional: bidirectionalGrade,
                 overall: totalGrade
             },
-            baselineLatency: baselineStats.p75,
+            baselineLatency: baselineStats.p25,
             downloadLoadedLatency: Math.round(downloadLoadedLatency),
             uploadLoadedLatency: Math.round(uploadLoadedLatency),
             bidirectionalLoadedLatency: Math.round(bidirectionalLoadedLatency),

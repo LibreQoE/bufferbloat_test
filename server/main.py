@@ -601,40 +601,44 @@ async def submit_telemetry(request: Request):
                 logger.error(f"Central telemetry storage failed: {e}")
         
         elif not IS_CENTRAL_SERVER:
-            # On ISP server - forward to central with ASN lookup
-            try:
-                # Get ASN for this IP first
-                asn_info = None
-                if TELEMETRY_AVAILABLE:
-                    asn_info = await telemetry_manager.get_asn(client_ip)
-                
-                # Forward to central server with IP + ASN + data
-                import aiohttp
-                central_payload = {
-                    "telemetry_enabled": data.get("telemetry_enabled", True),
-                    "results": data.get("results", {}),
-                    "client_ip": client_ip,  # Send IP to central for ASN verification
-                    "asn": asn_info,  # Pre-resolved ASN
-                    "user_agent": user_agent,
-                    "source_server": "isp"
-                }
-                
-                async with aiohttp.ClientSession() as session:
-                    response = await session.post(
-                        'https://test.libreqos.com/api/telemetry',
-                        json=central_payload,
-                        timeout=aiohttp.ClientTimeout(total=10)
-                    )
+            # On ISP server - only forward to central if this wasn't already forwarded FROM central
+            if data.get('forwarded_from') != 'central_server':
+                # Forward to central server with ASN lookup
+                try:
+                    # Get ASN for this IP first
+                    asn_info = None
+                    if TELEMETRY_AVAILABLE:
+                        asn_info = await telemetry_manager.get_asn(client_ip)
                     
-                    if response.status == 200:
-                        response_data = await response.json()
-                        central_test_id = response_data.get("test_id")
-                        logger.info(f"📊 Forwarded to central server (ID: {central_test_id})")
-                    else:
-                        logger.warning(f"Central server forward failed: HTTP {response.status}")
+                    # Forward to central server with IP + ASN + data
+                    import aiohttp
+                    central_payload = {
+                        "telemetry_enabled": data.get("telemetry_enabled", True),
+                        "results": data.get("results", {}),
+                        "client_ip": client_ip,  # Send IP to central for ASN verification
+                        "asn": asn_info,  # Pre-resolved ASN
+                        "user_agent": user_agent,
+                        "source_server": "isp"
+                    }
+                    
+                    async with aiohttp.ClientSession() as session:
+                        response = await session.post(
+                            'https://test.libreqos.com/api/telemetry',
+                            json=central_payload,
+                            timeout=aiohttp.ClientTimeout(total=10)
+                        )
                         
-            except Exception as e:
-                logger.warning(f"Central telemetry forward failed (non-critical): {e}")
+                        if response.status == 200:
+                            response_data = await response.json()
+                            central_test_id = response_data.get("test_id")
+                            logger.info(f"📊 Forwarded to central server (ID: {central_test_id})")
+                        else:
+                            logger.warning(f"Central server forward failed: HTTP {response.status}")
+                            
+                except Exception as e:
+                    logger.warning(f"Central telemetry forward failed (non-critical): {e}")
+            else:
+                logger.info("📊 Skipping central forward - already forwarded from central server")
         
         # Return success with appropriate test ID
         return JSONResponse({
